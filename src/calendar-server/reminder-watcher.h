@@ -61,6 +61,8 @@ EReminderWatcher *reminder_watcher_new          (GApplication *application,
                                                  ESourceRegistry *registry);
 void              reminder_watcher_dismiss_by_id(EReminderWatcher *reminder_watcher,
                                                  const char *id);
+void              reminder_watcher_snooze_by_id (EReminderWatcher *reminder_watcher,
+                                                 const char *id);
 
 G_END_DECLS
 
