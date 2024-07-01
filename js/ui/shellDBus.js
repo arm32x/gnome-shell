@@ -26,6 +26,7 @@ export class GnomeShell {
         this._senderChecker = new DBusSenderChecker([
             'org.gnome.Settings',
             'org.gnome.SettingsDaemon.MediaKeys',
+            'org.gnome.SettingsDaemon.ColorScheme',
         ]);
 
         this._extensionsService = new GnomeShellExtensions();
