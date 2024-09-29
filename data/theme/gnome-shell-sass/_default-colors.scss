@@ -1,24 +1,24 @@
 // Named Colors
 
 // base colors
-$_base_color_dark: desaturate($dark_4, 100%);
+$_base_color_dark: #2f383e;
 $_base_color_light: desaturate($light_2, 100%);
 
 // colors for destructive elements
-$destructive_bg_color: if($variant == 'light', $red_3, $red_4);
+$destructive_bg_color: if($variant == 'light', $red_3, $everforest_legacy_red);
 $destructive_fg_color: $light_1;
 $destructive_color: $destructive_bg_color;
 
 // colors for levelbars, entries, labels and infobars
-$success_bg_color: if($variant == 'light', $green_4, $green_5);
+$success_bg_color: if($variant == 'light', $green_4, $everforest_legacy_green);
 $success_fg_color: $light_1;
 $success_color: $success_bg_color;
 
-$warning_bg_color: if($variant == 'light', $yellow_4, $yellow_3);
+$warning_bg_color: if($variant == 'light', $yellow_4, $everforest_legacy_yellow);
 $warning_fg_color: transparentize(black, .2);
 $warning_color: $warning_bg_color;
 
-$error_bg_color: if($variant == 'light', $red_3, $red_4);
+$error_bg_color: if($variant == 'light', $red_3, $everforest_legacy_red);
 $error_fg_color: $light_1;
 $error_color: $error_bg_color;
 
