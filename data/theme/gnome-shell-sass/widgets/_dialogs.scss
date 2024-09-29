@@ -147,8 +147,8 @@
   border-radius: $base_border_radius * 2;
   &:hover,&:focus { background-color: $hover_bg_color; }
   &:active {
-    background-color: -st-accent-color;
-    color: -st-accent-fg-color;
+    background-color: $everforest_legacy_blue;
+    color: $white_1;
   }
 }
 

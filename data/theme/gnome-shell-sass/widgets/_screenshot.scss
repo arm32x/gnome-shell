@@ -168,18 +168,18 @@ $screenshot_ui_button_red: $red_4;
 .screenshot-ui-window-selector-window {
   &:hover {
     .screenshot-ui-window-selector-window-border {
-      border-color: st-darken(-st-accent-color, 15%);
+      border-color: st-darken($everforest_legacy_blue, 15%);
     }
   }
   &:checked {
     .screenshot-ui-window-selector-window-border {
-      border-color: -st-accent-color;
-      background-color: st-transparentize(-st-accent-color, 0.8);
+      border-color: $everforest_legacy_blue;
+      background-color: st-transparentize($everforest_legacy_blue, 0.8);
     }
 
     .screenshot-ui-window-selector-check {
-      color: -st-accent-fg-color;
-      background-color: -st-accent-color;
+      color: $white_1;
+      background-color: $everforest_legacy_blue;
     }
   }
 }

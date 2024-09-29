@@ -38,12 +38,12 @@ $switch_handle_size: 20px;
   }
 
   &:checked {
-    background: -st-accent-color;
-    color: -st-accent-fg-color;
+    background: $everforest_legacy_blue;
+    color: $white_1;
 
     &:hover {
-      background-color: st-lighten(-st-accent-color, 5%);
-      color: st-lighten(-st-accent-fg-color, 5%);
+      background-color: st-lighten($everforest_legacy_blue, 5%);
+      color: st-lighten($white_1, 5%);
     }
 
     .handle {

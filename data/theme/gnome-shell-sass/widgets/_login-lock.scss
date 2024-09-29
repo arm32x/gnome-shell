@@ -128,8 +128,8 @@ $_gdm_dialog_width: 25em;
   color: darken($_gdm_fg,30%);
 
   &:focus, &:selected {
-    background-color: -st-accent-color;
-    color: -st-accent-fg-color;
+    background-color: $everforest_legacy_blue;
+    color: $white_1;
   }
 }
 
@@ -175,9 +175,9 @@ $_gdm_dialog_width: 25em;
       &:logged-in {
         // color border for logged-in user
         .user-icon {
-          border-color: -st-accent-color;
+          border-color: $everforest_legacy_blue;
           StIcon {
-            background-color: st-transparentize(-st-accent-color, .7);
+            background-color: st-transparentize($everforest_legacy_blue, .7);
           }
         }
       }
@@ -238,7 +238,7 @@ $_gdm_dialog_width: 25em;
   StButton#vhandle, StButton#hhandle {
     background-color: transparentize($bg_color,0.7);
     &:hover, &:focus { background-color: transparentize($bg_color,0.5); }
-    &:active { background-color: st-transparentize(-st-accent-color,0.5); }
+    &:active { background-color: st-transparentize($everforest_legacy_blue,0.5); }
   }
 }
 

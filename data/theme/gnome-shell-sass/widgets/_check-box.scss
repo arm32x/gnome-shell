@@ -11,7 +11,7 @@
   &:focus StBin {
     // Trick due to St limitations. It needs a background to draw a box-shadow
     background-color: rgba(0, 0, 0, 0.01);
-    box-shadow: inset 0 0 0 2px st-transparentize(-st-accent-color, .65);
+    box-shadow: inset 0 0 0 2px st-transparentize($everforest_legacy_blue, .65);
   }
 
   StIcon {
@@ -32,18 +32,18 @@
   }
 
   &:checked StIcon {
-    background-color: -st-accent-color;
-    color: -st-accent-fg-color;
+    background-color: $everforest_legacy_blue;
+    color: $white_1;
     border-color: transparent;
   }
 
   &:checked:hover StIcon {
-    background-color: st-lighten(-st-accent-color, 5%);
-    color: st-lighten(-st-accent-fg-color, 5%);
+    background-color: st-lighten($everforest_legacy_blue, 5%);
+    color: st-lighten($white_1, 5%);
   }
 
   &:checked:active StIcon {
-    background-color: st-darken(-st-accent-color, 7%);
-    color: st-darken(-st-accent-fg-color, 7%);
+    background-color: st-darken($everforest_legacy_blue, 7%);
+    color: st-darken($white_1, 7%);
   }
 }
