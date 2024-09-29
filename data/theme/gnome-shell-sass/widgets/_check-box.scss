@@ -33,17 +33,17 @@
 
   &:checked StIcon {
     background-color: $everforest_legacy_blue;
-    color: $white_1;
+    color: $light_1;
     border-color: transparent;
   }
 
   &:checked:hover StIcon {
     background-color: st-lighten($everforest_legacy_blue, 5%);
-    color: st-lighten($white_1, 5%);
+    color: st-lighten($light_1, 5%);
   }
 
   &:checked:active StIcon {
     background-color: st-darken($everforest_legacy_blue, 7%);
-    color: st-darken($white_1, 7%);
+    color: st-darken($light_1, 7%);
   }
 }

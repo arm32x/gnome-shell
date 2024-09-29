@@ -120,11 +120,11 @@ stage {
 }
 
 %default_button {
-  @include button(normal, $c:$everforest_legacy_blue, $tc:$white_1, $style: default);
-  &:focus { @include button(focus, $c:$everforest_legacy_blue, $tc:$white_1, $style: default);}
-  &:hover { @include button(hover, $c:$everforest_legacy_blue, $tc:$white_1, $style: default);}
-  &:insensitive { @include button(insensitive, $c:$everforest_legacy_blue, $tc:$white_1, $style: default);}
-  &:active { @include button(active, $c:$everforest_legacy_blue, $tc:$white_1, $style: default);}
+  @include button(normal, $c:$everforest_legacy_blue, $tc:$light_1, $style: default);
+  &:focus { @include button(focus, $c:$everforest_legacy_blue, $tc:$light_1, $style: default);}
+  &:hover { @include button(hover, $c:$everforest_legacy_blue, $tc:$light_1, $style: default);}
+  &:insensitive { @include button(insensitive, $c:$everforest_legacy_blue, $tc:$light_1, $style: default);}
+  &:active { @include button(active, $c:$everforest_legacy_blue, $tc:$light_1, $style: default);}
 }
 
 // items in popover menus

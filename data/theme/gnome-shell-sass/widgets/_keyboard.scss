@@ -70,10 +70,10 @@ $default_key_bg_color: if($variant=='light', darken($key_bg_color, 11%), darken(
 
   // enter key is suggested-action
   &.enter-key {
-    @include button(normal, $c:$everforest_legacy_blue, $tc:$white_1);
-    &:hover { @include button(hover, $c:$everforest_legacy_blue, $tc:$white_1);}
-    &:active { @include button(active, $c:$everforest_legacy_blue, $tc:$white_1);}
-    &:checked { @include button(checked, $c:$everforest_legacy_blue, $tc:$white_1);}
+    @include button(normal, $c:$everforest_legacy_blue, $tc:$light_1);
+    &:hover { @include button(hover, $c:$everforest_legacy_blue, $tc:$light_1);}
+    &:active { @include button(active, $c:$everforest_legacy_blue, $tc:$light_1);}
+    &:checked { @include button(checked, $c:$everforest_legacy_blue, $tc:$light_1);}
     border-radius: $key_border_radius;
     color: $osd_fg_color;
   }

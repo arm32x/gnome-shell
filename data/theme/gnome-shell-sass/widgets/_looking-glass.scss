@@ -223,11 +223,11 @@
       }
       &:checked {
         background: $everforest_legacy_blue;
-        color: $white_1;
+        color: $light_1;
 
         &:hover {
           background-color: st-lighten($everforest_legacy_blue, 5%);
-          color: st-lighten($white_1, 5%);
+          color: st-lighten($light_1, 5%);
         }
       }
     }
