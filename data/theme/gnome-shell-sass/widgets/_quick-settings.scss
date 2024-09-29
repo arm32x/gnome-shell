@@ -116,7 +116,7 @@
       icon-size: $medium_scalable_icon_size;
       border-radius: $forced_circular_radius;
       padding: 1.5 * $base_padding;
-      background-color: transparentize($fg_color, 0.8);
+      background-color: $everforest_legacy_bg2;
 
       &.active {
         background-color: $everforest_legacy_blue;

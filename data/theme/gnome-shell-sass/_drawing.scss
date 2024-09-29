@@ -209,6 +209,24 @@
     $checked_active_button_bg_color: st-lighten($checked_button_bg_color, $active_factor);
   }
 
+  // try not to interfere with other buttons
+  @if $c == $everforest_legacy_bg0 {
+    @if $style != 'flat' and $style != 'default' {
+      $button_bg_color: $everforest_legacy-bg1;
+    }
+
+    // button base state background colors
+    $hover_button_bg_color: $everforest_legacy_bg2;
+    $active_button_bg_color: $everforest_legacy_bg3;
+    $checked_button_bg_color: $everforest_legacy_bg3;
+    $insensitive_button_bg_color: $everforest_legacy_bg1;
+
+    // button extended state background colors
+    $active_hover_button_bg_color: $everforest_legacy_bg3;
+    $checked_hover_button_bg_color: $everforest_legacy_bg4;
+    $checked_active_button_bg_color: $everforest_legacy_bg4;
+  }
+
   // background color override for buttons that use transparency
   // styles: dialogs bubbles, lockscreen
   @if $style == 'dialog' or $style == 'lockscreen' {
@@ -386,8 +404,8 @@
     @include button(hover, $c:$bg);
   }
   &:active {@include button(active, $c:$bg);}
-  &:selected,
-  &:checked {@include button(checked, $c:$bg);}
+  // &:selected,
+  // &:checked {@include button(checked, $c:$bg);}
   &:insensitive {@include button(insensitive, $c:$bg);}
 }
 
@@ -413,9 +431,9 @@
 
   // background fill defines
   $fill:              transparent;
-  $hover_fill:        transparentize($fg, .83);
-  $active_fill:       transparentize($fg, .72);
-  $active_hover_fill: transparentize($fg, .68);
+  $hover_fill:        $everforest_legacy_bg1;
+  $active_fill:       $everforest_legacy_bg2;
+  $active_hover_fill: $everforest_legacy_bg2;
 
   @if $style == 'filled' {
     $fill:              $bg;

@@ -3,11 +3,11 @@
 $slider_size: $scalable_icon_size;
 
 .slider {
-  color: if($variant == 'light', $fg_color, darken($fg_color, 9%));
+  color: $fg_color;
 
   // slider trough
   -barlevel-height: 4px;
-  -barlevel-background-color: transparentize($fg_color, 0.9);
+  -barlevel-background-color: $everforest_legacy_bg1;
   // fill style
   -barlevel-active-background-color: $everforest_legacy_blue;
   // overfill style (red in this case)
@@ -22,6 +22,6 @@ $slider_size: $scalable_icon_size;
   }
 
   &:hover {
-    color: if($variant == 'light', lighten($fg_color, 7%), $fg_color);
+    color: $light_2;
   }
 }

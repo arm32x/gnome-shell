@@ -17,11 +17,11 @@ $osd_fg_color: $fg_color;
 $osd_bg_color: $bg_color;
 
 // system elements (e.g. the overview) that are always dark
-$system_base_color: $_base_color_dark;
+$system_base_color: $everforest_legacy_bg_dim;
 $system_fg_color: $fg_color;
 
 // panel colors
-$panel_bg_color: if($variant == 'light', $_base_color_light, $bg_color);
+$panel_bg_color: if($variant == 'light', $_base_color_light, $system_base_color);
 $panel_fg_color: if($variant == 'light', $_base_color_dark, $fg_color);
 
 // card elements
@@ -35,18 +35,19 @@ $card_shadow_border_color: if($variant == 'light', transparentize($dark_5, .91),
 // colors based on the global defines above
 
 // borders
-$borders_color: transparentize($fg_color, $border_opacity);
-$outer_borders_color: if($variant == 'light', darken($bg_color, 7%), lighten($bg_color, 5%));
+$borders_color: $everforest_legacy_bg1;
+$outer_borders_color: $everforest_legacy_bg1;
 
 // osd colors
-$osd_borders_color: transparentize($osd_fg_color, 0.9);
-$osd_outer_borders_color: transparentize($osd_fg_color, 0.98);
+$osd_borders_color: $everforest_legacy_bg1;
+$osd_outer_borders_color: $everforest_legacy_bg1;
 
 // system colors
-$system_bg_color: lighten($system_base_color, 5%);
-$system_borders_color: transparentize($system_fg_color, .9);
+$system_bg_color: $everforest_legacy_bg0;
+$system_borders_color: $everforest_legacy_bg1;
 $system_insensitive_fg_color: mix($system_fg_color, $system_bg_color, 50%);
-$system_overlay_bg_color: mix($system_base_color, $system_fg_color, 90%); // for non-transparent items, e.g. dash
+$system_overlay_bg_color: $everforest_legacy_bg0; // for non-transparent items, e.g. dash
+                                                  // only appears in overview, so won't conflict with $system_bg_color
 
 // insensitive state
 $insensitive_fg_color: if($variant == 'light', mix($fg_color, $bg_color, 60%),  mix($fg_color, $bg_color, 50%));
@@ -54,16 +55,16 @@ $insensitive_bg_color: mix($bg_color, $base_color, 60%);
 $insensitive_borders_color: mix($borders_color, $base_color, 60%);
 
 // checked state
-$checked_bg_color: if($variant=='light', darken($bg_color, 7%), lighten($bg_color, 7%));
-$checked_fg_color: if($variant=='light', darken($fg_color, 7%), lighten($fg_color, 7%));
+$checked_bg_color: if($variant=='light', darken($bg_color, 7%), lighten($bg_color, 7%)); // literally never used
+$checked_fg_color: if($variant=='light', darken($fg_color, 7%), $fg_color);
 
 // hover state
-$hover_bg_color: if($variant=='light', darken($bg_color,9%), lighten($bg_color, 10%));
-$hover_fg_color: if($variant=='light', darken($fg_color,9%), lighten($fg_color, 10%));
+$hover_bg_color: if($variant=='light', darken($bg_color,9%), $everforest_legacy_bg2);
+$hover_fg_color: if($variant=='light', darken($fg_color,9%), $fg_color);
 
 // active state
-$active_bg_color: if($variant=='light', darken($bg_color, 11%), lighten($bg_color, 12%));
-$active_fg_color: if($variant=='light', darken($fg_color, 11%), lighten($fg_color, 12%));
+$active_bg_color: if($variant=='light', darken($bg_color, 11%), $everforest_legacy_bg3);
+$active_fg_color: if($variant=='light', darken($fg_color, 11%), $fg_color);
 
 // accent colors
-$accent_borders_color: if($variant== 'light', st-darken($everforest_legacy_blue, 15%), st-lighten($everforest_legacy_blue, 15%));
+$accent_borders_color: if($variant== 'light', st-darken($everforest_legacy_blue, 15%), $everforest_legacy_blue);

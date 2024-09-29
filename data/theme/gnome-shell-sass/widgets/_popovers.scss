@@ -2,10 +2,10 @@
 
 $menu_bg_color: $bg_color;
 
-$menuitem_bg_color:  if($variant == 'light', darken($menu_bg_color, 5%),  lighten($menu_bg_color, 5%));
+$menuitem_bg_color:  if($variant == 'light', darken($menu_bg_color, 5%),  $menu_bg_color);
 $menuitem_border_radius: $base_border_radius * 1.5;
 
-$submenu_bg_color: if($variant == 'light', darken($menu_bg_color, 17%),  lighten($menu_bg_color, 13%));
+$submenu_bg_color: if($variant == 'light', darken($menu_bg_color, 17%),  $menu_bg_color);
 
 // the popover itself
 .popup-menu-boxpointer {
@@ -34,7 +34,7 @@ $submenu_bg_color: if($variant == 'light', darken($menu_bg_color, 17%),  lighten
 
 // menu items
 .popup-menu-item {
-  @include menuitem($bg:$menuitem_bg_color);
+  @include menuitem($bg:$everforest_legacy_bg0);
 
   border-radius: $menuitem_border_radius;
 
