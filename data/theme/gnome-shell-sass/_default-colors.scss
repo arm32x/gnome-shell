@@ -1,7 +1,7 @@
 // Named Colors
 
 // base colors
-$_base_color_dark: #2f383e;
+$_base_color_dark: $everforest_legacy_bg0;
 $_base_color_light: desaturate($light_2, 100%);
 
 // colors for destructive elements
@@ -23,8 +23,8 @@ $error_fg_color: $light_1;
 $error_color: $error_bg_color;
 
 // link colors
-$link_color: if($variant == 'light', st-darken($everforest_legacy_blue, 10%), st-lighten($everforest_legacy_blue, 20%));
-$link_visited_color: st-transparentize($link_color, .6);
+$link_color: if($variant == 'light', st-darken($everforest_legacy_blue, 10%), $everforest_legacy_blue);
+$link_visited_color: $everforest_legacy_purple;
 
 // special cased widget definitions
 $background_mix_factor: if($variant == 'light', 12%, 9%); // used to boost the color of backgrounds in different variants
