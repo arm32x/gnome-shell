@@ -21,7 +21,7 @@ const BrightnessProxy = Gio.DBusProxy.makeProxyWrapper(BrightnessInterface);
 const SliderItem = GObject.registerClass({
     Properties: {
         'value': GObject.ParamSpec.int(
-            'value', '', '',
+            'value', null, null,
             GObject.ParamFlags.READWRITE,
             0, 100, 0),
     },
@@ -55,16 +55,24 @@ const SliderItem = GObject.registerClass({
 
         this.notify('value');
     }
+
+    vfunc_key_press_event(event) {
+        const key = event.get_key_symbol();
+        if (key === Clutter.KEY_Left || key === Clutter.KEY_Right)
+            return this._slider.vfunc_key_press_event(event);
+        else
+            return super.vfunc_key_press_event(event);
+    }
 });
 
 const DiscreteItem = GObject.registerClass({
     Properties: {
         'value': GObject.ParamSpec.int(
-            'value', '', '',
+            'value', null, null,
             GObject.ParamFlags.READWRITE,
             0, 100, 0),
         'n-levels': GObject.ParamSpec.int(
-            'n-levels', '', '',
+            'n-levels', null, null,
             GObject.ParamFlags.READWRITE,
             1, 3, 1),
     },
@@ -98,17 +106,23 @@ const DiscreteItem = GObject.registerClass({
         return 100 * Math.min(keyIndex, this.nLevels - 1) / (this.nLevels - 1);
     }
 
-    _addLevelButton(key, label, iconName) {
+    _addLevelButton(key, labelText, iconName) {
         const box = new St.BoxLayout({
             style_class: 'keyboard-brightness-level',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
+        });
+
+        const label = new St.Label({
+            text: labelText,
+            x_align: Clutter.ActorAlign.CENTER,
         });
 
         box.button = new St.Button({
             styleClass: 'icon-button',
             canFocus: true,
             iconName,
+            labelActor: label,
         });
         box.add_child(box.button);
 
@@ -116,13 +130,14 @@ const DiscreteItem = GObject.registerClass({
             this.value = this._levelToValue(key);
         });
 
-        box.add_child(new St.Label({
-            text: label,
-            x_align: Clutter.ActorAlign.CENTER,
-        }));
+        box.add_child(label);
 
         this.add_child(box);
         this._levelButtons.set(key, box);
+    }
+
+    vfunc_key_press_event(event) {
+        return global.focus_manager.navigate_from_event(event);
     }
 
     _syncLevels() {
@@ -163,6 +178,10 @@ class KeyboardBrightnessToggle extends QuickMenuToggle {
 
         this._sliderItem = new SliderItem();
         this.menu.box.add_child(this._sliderItem);
+        const sliderAccessible = this._sliderItem._slider.get_accessible();
+        sliderAccessible.set_parent(this.menu.box.get_accessible());
+        this._sliderItem.set_accessible(sliderAccessible);
+
 
         this._discreteItem = new DiscreteItem();
         this.menu.box.add_child(this._discreteItem);

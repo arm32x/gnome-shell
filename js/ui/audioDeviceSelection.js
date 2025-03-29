@@ -55,17 +55,18 @@ const AudioDeviceSelectionDialog = GObject.registerClass({
 
         this.contentLayout.add_child(content);
 
+        this.addButton({
+            action: () => this.close(),
+            label: _('Cancel'),
+            key: Clutter.KEY_Escape,
+        });
+
         if (Main.sessionMode.allowSettings) {
             this.addButton({
                 action: this._openSettings.bind(this),
                 label: _('Sound Settings'),
             });
         }
-        this.addButton({
-            action: () => this.close(),
-            label: _('Cancel'),
-            key: Clutter.KEY_Escape,
-        });
     }
 
     _getDeviceLabel(device) {
@@ -97,7 +98,7 @@ const AudioDeviceSelectionDialog = GObject.registerClass({
     _addDevice(device) {
         const box = new St.BoxLayout({
             style_class: 'audio-selection-device-box',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
         });
         box.connect('notify::height', () => {
             const laters = global.compositor.get_laters();

@@ -8,6 +8,7 @@ import St from 'gi://St';
 
 import * as AccessDialog from './accessDialog.js';
 import * as AudioDeviceSelection from './audioDeviceSelection.js';
+import * as BreakManager from '../misc/breakManager.js';
 import * as Config from '../misc/config.js';
 import * as Components from './components.js';
 import * as CtrlAltTab from './ctrlAltTab.js';
@@ -36,6 +37,7 @@ import * as ScreenShield from './screenShield.js';
 import * as SessionMode from './sessionMode.js';
 import * as ShellDBus from './shellDBus.js';
 import * as ShellMountOperation from './shellMountOperation.js';
+import * as TimeLimitsManager from '../misc/timeLimitsManager.js';
 import * as WindowManager from './windowManager.js';
 import * as Magnifier from './magnifier.js';
 import * as XdndHandler from './xdndHandler.js';
@@ -89,6 +91,11 @@ export let inputMethod = null;
 export let introspectService = null;
 export let locatePointer = null;
 export let endSessionDialog = null;
+export let breakManager = null;
+export let screenTimeDBus = null;
+export let breakManagerDispatcher = null;
+export let timeLimitsManager = null;
+export let timeLimitsDispatcher = null;
 
 let _startDate;
 let _defaultCssStylesheet = null;
@@ -229,9 +236,9 @@ async function _initializeUI() {
         screenShield = new ScreenShield.ScreenShield();
 
     inputMethod = new InputMethod.InputMethod();
-    Clutter.get_default_backend().set_input_method(inputMethod);
+    global.stage.context.get_backend().set_input_method(inputMethod);
     global.connect('shutdown',
-        () => Clutter.get_default_backend().set_input_method(null));
+        () => global.stage.context.get_backend().set_input_method(null));
 
     screenshotUI = new Screenshot.ScreenshotUI();
 
@@ -243,6 +250,27 @@ async function _initializeUI() {
     componentManager = new Components.ComponentManager();
 
     introspectService = new Introspect.IntrospectService();
+
+    // Set up the global default break reminder manager and its D-Bus interface
+    breakManager = new BreakManager.BreakManager();
+    timeLimitsManager = new TimeLimitsManager.TimeLimitsManager();
+    screenTimeDBus = new ShellDBus.ScreenTimeDBus(breakManager);
+    breakManagerDispatcher = new BreakManager.BreakDispatcher(breakManager);
+    timeLimitsDispatcher = new TimeLimitsManager.TimeLimitsDispatcher(timeLimitsManager);
+
+    global.connect('shutdown', () => {
+        // Block shutdown until the session history file has been written
+        const loop = new GLib.MainLoop(null, false);
+        const source = GLib.idle_source_new();
+        source.set_callback(() => {
+            timeLimitsManager.shutdown()
+                .catch(e => console.warn(`Failed to stop time limits manager: ${e.message}`))
+                .finally(() => loop.quit());
+            return GLib.SOURCE_REMOVE;
+        });
+        source.attach(loop.get_context());
+        loop.run();
+    });
 
     layoutManager.init();
     overview.init();
@@ -610,9 +638,9 @@ export function loadTheme() {
 
 /**
  * @param {string} msg A message
- * @param {string} details Additional information
+ * @param {string=} details Additional information
  */
-export function notify(msg, details) {
+export function notify(msg, details = null) {
     const source = MessageTray.getSystemSource();
     const notification = new MessageTray.Notification({
         source,
@@ -679,7 +707,7 @@ export function pushModal(actor, params = {}) {
     let grab = global.stage.grab(actor);
 
     if (modalCount === 0)
-        Meta.disable_unredirect_for_display(global.display);
+        global.compositor.disable_unredirect();
 
     modalCount += 1;
     let actorDestroyId = actor.connect('destroy', () => {
@@ -709,7 +737,8 @@ export function pushModal(actor, params = {}) {
     });
 
     actionMode = newActionMode;
-    global.stage.set_key_focus(actor);
+    const newFocus = actor === global.stage ? null : actor;
+    global.stage.set_key_focus(newFocus);
     return grab;
 }
 
@@ -773,7 +802,7 @@ export function popModal(grab) {
         return;
 
     layoutManager.modalEnded();
-    Meta.enable_unredirect_for_display(global.display);
+    global.compositor.enable_unredirect();
     actionMode = Shell.ActionMode.NORMAL;
 }
 
@@ -988,7 +1017,7 @@ class RestartMessage extends ModalDialog.ModalDialog {
     _init(message) {
         super._init({
             shellReactive: true,
-            styleClass: 'restart-message headline',
+            styleClass: 'restart-message',
             shouldFadeIn: false,
             destroyOnClose: true,
         });

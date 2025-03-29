@@ -27,8 +27,9 @@
  */
 
 /**
- * SECTION:shell-window-tracker
- * @short_description: Associate windows with applications
+ * ShellWindowTracker:
+ *
+ * Associate windows with applications
  *
  * Maintains a mapping from windows to applications (.desktop file ids).
  * It currently implements this with some heuristics on the WM_CLASS X11
@@ -68,8 +69,6 @@ enum {
 static guint signals[LAST_SIGNAL] = { 0 };
 
 static void shell_window_tracker_finalize (GObject *object);
-static void set_focus_app (ShellWindowTracker  *tracker,
-                           ShellApp            *new_focus_app);
 static void on_focus_window_changed (MetaDisplay *display, GParamSpec *spec, ShellWindowTracker *tracker);
 
 static void track_window (ShellWindowTracker *tracker, MetaWindow *window);
@@ -105,9 +104,7 @@ shell_window_tracker_class_init (ShellWindowTrackerClass *klass)
   gobject_class->finalize = shell_window_tracker_finalize;
 
   props[PROP_FOCUS_APP] =
-    g_param_spec_object ("focus-app",
-                         "Focus App",
-                         "Focused application",
+    g_param_spec_object ("focus-app", NULL, NULL,
                          SHELL_TYPE_APP,
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
@@ -502,7 +499,8 @@ update_focus_app (ShellWindowTracker *self)
       shell_app_update_app_actions (new_focus_app, new_focus_win);
     }
 
-  set_focus_app (self, new_focus_app);
+  if (g_set_object (&self->focus_app, new_focus_app))
+    g_object_notify_by_pspec (G_OBJECT (self), props[PROP_FOCUS_APP]);
 
   g_clear_object (&new_focus_app);
 }
@@ -715,6 +713,18 @@ shell_window_tracker_get_window_app (ShellWindowTracker *tracker,
   return app;
 }
 
+/**
+ * shell_window_tracker_get_focus_app:
+ *
+ * Returns: (transfer none) (nullable):
+ */
+ShellApp *
+shell_window_tracker_get_focus_app (ShellWindowTracker *tracker)
+{
+  g_return_val_if_fail (SHELL_IS_WINDOW_TRACKER (tracker), NULL);
+  return tracker->focus_app;
+}
+
 
 /**
  * shell_window_tracker_get_app_from_pid:
@@ -757,24 +767,6 @@ shell_window_tracker_get_app_from_pid (ShellWindowTracker *tracker,
   g_slist_free (running);
 
   return result;
-}
-
-static void
-set_focus_app (ShellWindowTracker  *tracker,
-               ShellApp            *new_focus_app)
-{
-  if (new_focus_app == tracker->focus_app)
-    return;
-
-  if (tracker->focus_app != NULL)
-    g_object_unref (tracker->focus_app);
-
-  tracker->focus_app = new_focus_app;
-
-  if (tracker->focus_app != NULL)
-    g_object_ref (tracker->focus_app);
-
-  g_object_notify_by_pspec (G_OBJECT (tracker), props[PROP_FOCUS_APP]);
 }
 
 static void

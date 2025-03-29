@@ -22,8 +22,7 @@
 #error "Only <st/st.h> can be included directly.h"
 #endif
 
-#ifndef __ST_ADJUSTMENT_H__
-#define __ST_ADJUSTMENT_H__
+#pragma once
 
 #include <glib-object.h>
 #include <clutter/clutter.h>
@@ -58,6 +57,21 @@ StAdjustment *st_adjustment_new         (ClutterActor *actor,
 gdouble       st_adjustment_get_value   (StAdjustment *adjustment);
 void          st_adjustment_set_value   (StAdjustment *adjustment,
                                          gdouble       value);
+double        st_adjustment_get_lower   (StAdjustment *adjustment);
+void          st_adjustment_set_lower   (StAdjustment *adjustment,
+                                         gdouble       lower);
+double        st_adjustment_get_upper   (StAdjustment *adjustment);
+void          st_adjustment_set_upper   (StAdjustment *adjustment,
+                                         gdouble       upper);
+double        st_adjustment_get_step_increment (StAdjustment *adjustment);
+void          st_adjustment_set_step_increment (StAdjustment *adjustment,
+                                                gdouble       step);
+double        st_adjustment_get_page_increment (StAdjustment *adjustment);
+void          st_adjustment_set_page_increment (StAdjustment *adjustment,
+                                                gdouble       page);
+double        st_adjustment_get_page_size (StAdjustment *adjustment);
+void          st_adjustment_set_page_size (StAdjustment *adjustment,
+                                           gdouble       size);
 void          st_adjustment_clamp_page  (StAdjustment *adjustment,
                                          gdouble       lower,
                                          gdouble       upper);
@@ -87,6 +101,8 @@ void                st_adjustment_add_transition    (StAdjustment      *adjustme
 void                st_adjustment_remove_transition (StAdjustment      *adjustment,
                                                      const char        *name);
 
-G_END_DECLS
+ClutterActor * st_adjustment_get_actor (StAdjustment *adjustment);
+void           st_adjustment_set_actor (StAdjustment *adjustment,
+                                        ClutterActor *actor);
 
-#endif /* __ST_ADJUSTMENT_H__ */
+G_END_DECLS

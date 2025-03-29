@@ -5,7 +5,6 @@ import GDesktopEnums from 'gi://GDesktopEnums';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
-import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Signals from '../misc/signals.js';
@@ -100,8 +99,7 @@ export class Magnifier extends Signals.EventEmitter {
         this._zoomRegions = [];
 
         // Create small clutter tree for the magnified mouse.
-        let cursorTracker = Meta.CursorTracker.get_for_display(global.display);
-        this._cursorTracker = cursorTracker;
+        this._cursorTracker = global.backend.get_cursor_tracker();
 
         this._mouseSprite = new Clutter.Actor({request_mode: Clutter.RequestMode.CONTENT_SIZE});
         this._mouseSprite.content = new MouseSpriteContent();
@@ -109,6 +107,8 @@ export class Magnifier extends Signals.EventEmitter {
         this._cursorRoot = new Clutter.Actor();
         this._cursorRoot.add_child(this._mouseSprite);
 
+        const backend = this._cursorRoot.get_context().get_backend();
+        this._seat = backend.get_default_seat();
         // Create the first ZoomRegion and initialize it according to the
         // magnification settings.
 
@@ -132,10 +132,8 @@ export class Magnifier extends Signals.EventEmitter {
      * Show the system mouse pointer.
      */
     showSystemCursor() {
-        const seat = Clutter.get_default_backend().get_default_seat();
-
         if (this._cursorUnfocusInhibited) {
-            seat.uninhibit_unfocus();
+            this._seat.uninhibit_unfocus();
             this._cursorUnfocusInhibited = false;
         }
 
@@ -152,10 +150,8 @@ export class Magnifier extends Signals.EventEmitter {
      * Hide the system mouse pointer.
      */
     hideSystemCursor() {
-        const seat = Clutter.get_default_backend().get_default_seat();
-
         if (!this._cursorUnfocusInhibited) {
-            seat.inhibit_unfocus();
+            this._seat.inhibit_unfocus();
             this._cursorUnfocusInhibited = true;
         }
 
@@ -188,12 +184,12 @@ export class Magnifier extends Signals.EventEmitter {
             this._updateMouseSprite();
             this._cursorTracker.connectObject(
                 'cursor-changed', this._updateMouseSprite.bind(this), this);
-            Meta.disable_unredirect_for_display(global.display);
+            global.compositor.disable_unredirect();
             this.startTrackingMouse();
         } else {
             this._cursorTracker.disconnectObject(this);
             this._mouseSprite.content.texture = null;
-            Meta.enable_unredirect_for_display(global.display);
+            global.compositor.enable_unredirect();
             this.stopTrackingMouse();
         }
 
@@ -864,10 +860,7 @@ class ZoomRegion {
         if (!focusWindow)
             return null;
 
-        let windowRect = focusWindow.get_frame_rect();
-        if (!focusWindow.is_client_decorated())
-            windowRect = focusWindow.frame_rect_to_client_rect(windowRect);
-
+        const windowRect = focusWindow.get_client_content_rect();
         const scaleFactor = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const screenSpaceExtents = new Atspi.Rect({
             x: windowRect.x + (scaleFactor * extents.x),

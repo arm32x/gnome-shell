@@ -21,10 +21,10 @@
    Author: Stef Walter <stefw@gnome.org>
 */
 
-#ifndef __SHELL_SECURE_TEXT_BUFFER_H__
-#define __SHELL_SECURE_TEXT_BUFFER_H__
+#pragma once
 
 #include <clutter/clutter.h>
+#include <clutter/clutter-pango.h>
 
 G_BEGIN_DECLS
 
@@ -35,5 +35,3 @@ G_DECLARE_FINAL_TYPE (ShellSecureTextBuffer, shell_secure_text_buffer,
 ClutterTextBuffer *       shell_secure_text_buffer_new                    (void);
 
 G_END_DECLS
-
-#endif /* __SHELL_SECURE_TEXT_BUFFER_H__ */

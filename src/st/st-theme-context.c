@@ -43,6 +43,8 @@
 struct _StThemeContext {
   GObject parent;
 
+  ClutterBackend *clutter_backend;
+
   PangoFontDescription *font;
   CoglColor accent_color;
   CoglColor accent_fg_color;
@@ -97,18 +99,6 @@ static void st_theme_context_get_property (GObject      *object,
                                            GValue       *value,
                                            GParamSpec   *pspec);
 
-static void
-st_theme_context_set_scale_factor (StThemeContext *context,
-                                   int             scale_factor)
-{
-  if (scale_factor == context->scale_factor)
-    return;
-
-  context->scale_factor = scale_factor;
-  g_object_notify_by_pspec (G_OBJECT (context), props[PROP_SCALE_FACTOR]);
-  st_theme_context_changed (context);
-}
-
 
 static void
 st_theme_context_finalize (GObject *object)
@@ -124,7 +114,7 @@ st_theme_context_finalize (GObject *object)
   g_signal_handlers_disconnect_by_func (st_texture_cache_get_default (),
                                        (gpointer) on_icon_theme_changed,
                                        context);
-  g_signal_handlers_disconnect_by_func (clutter_get_default_backend (),
+  g_signal_handlers_disconnect_by_func (context->clutter_backend,
                                         (gpointer) st_theme_context_changed,
                                         context);
 
@@ -157,9 +147,7 @@ st_theme_context_class_init (StThemeContextClass *klass)
    * The scaling factor used for HiDPI scaling.
    */
   props[PROP_SCALE_FACTOR] =
-    g_param_spec_int ("scale-factor",
-                      "Scale factor",
-                      "Integer scale factor used for HiDPI scaling",
+    g_param_spec_int ("scale-factor", NULL, NULL,
                       0, G_MAXINT, 1,
                       ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -198,10 +186,6 @@ st_theme_context_init (StThemeContext *context)
                     "icon-theme-changed",
                     G_CALLBACK (on_icon_theme_changed),
                     context);
-  g_signal_connect_swapped (clutter_get_default_backend (),
-                            "resolution-changed",
-                            G_CALLBACK (st_theme_context_changed),
-                            context);
 
   context->nodes = g_hash_table_new_full ((GHashFunc) st_theme_node_hash,
                                           (GEqualFunc) st_theme_node_equal,
@@ -247,26 +231,6 @@ st_theme_context_get_property (GObject    *object,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
     }
-}
-
-/**
- * st_theme_context_new:
- *
- * Create a new theme context not associated with any #ClutterStage.
- * This can be useful in testing scenarios, or if using StThemeContext
- * with something other than #ClutterActor objects, but you generally
- * should use st_theme_context_get_for_stage() instead.
- *
- * Returns: (transfer full): a new #StThemeContext
- */
-StThemeContext *
-st_theme_context_new (void)
-{
-  StThemeContext *context;
-
-  context = g_object_new (ST_TYPE_THEME_CONTEXT, NULL);
-
-  return context;
 }
 
 static PangoFontDescription *
@@ -401,6 +365,7 @@ StThemeContext *
 st_theme_context_get_for_stage (ClutterStage *stage)
 {
   StThemeContext *context;
+  ClutterContext *clutter_context;
 
   g_return_val_if_fail (CLUTTER_IS_STAGE (stage), NULL);
 
@@ -408,10 +373,18 @@ st_theme_context_get_for_stage (ClutterStage *stage)
   if (context)
     return context;
 
-  context = st_theme_context_new ();
+  clutter_context = clutter_actor_get_context (CLUTTER_ACTOR (stage));
+
+  context = g_object_new (ST_TYPE_THEME_CONTEXT, NULL);
+  context->clutter_backend = clutter_context_get_backend (clutter_context);
+
   g_object_set_data (G_OBJECT (stage), "st-theme-context", context);
   g_signal_connect (stage, "destroy",
                     G_CALLBACK (on_stage_destroy), NULL);
+  g_signal_connect_swapped (context->clutter_backend,
+                            "resolution-changed",
+                            G_CALLBACK (st_theme_context_changed),
+                            context);
 
   return context;
 }
@@ -591,4 +564,39 @@ st_theme_context_get_scale_factor (StThemeContext *context)
   g_return_val_if_fail (ST_IS_THEME_CONTEXT (context), -1);
 
   return context->scale_factor;
+}
+
+/**
+ * st_theme_context_set_scale_factor:
+ * @context: a #StThemeContext
+ * @factor: the new factor
+ *
+ * Set the new scale factor of @context.
+ */
+void
+st_theme_context_set_scale_factor (StThemeContext *context,
+                                   int             scale_factor)
+{
+  g_return_if_fail (ST_IS_THEME_CONTEXT (context));
+
+  if (scale_factor == context->scale_factor)
+    return;
+
+  context->scale_factor = scale_factor;
+  g_object_notify_by_pspec (G_OBJECT (context), props[PROP_SCALE_FACTOR]);
+  st_theme_context_changed (context);
+}
+
+/**
+ * st_theme_context_get_resolution:
+ * @context: a #StThemeContext
+ *
+ * Returns: The font resolution
+ */
+double
+st_theme_context_get_resolution (StThemeContext *context)
+{
+  g_return_val_if_fail (ST_IS_THEME_CONTEXT (context), -1);
+
+  return clutter_backend_get_resolution (context->clutter_backend);
 }

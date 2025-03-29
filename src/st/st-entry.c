@@ -20,8 +20,9 @@
  */
 
 /**
- * SECTION:st-entry
- * @short_description: Widget for displaying text
+ * StEntry:
+ *
+ * Widget for displaying text
  *
  * #StEntry is a simple widget for displaying text. It derives from
  * #StWidget to add extra style and placement functionality over
@@ -34,9 +35,7 @@
  * - `indeterminate`: the widget is showing the hint text or actor
  */
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
 
 #include <math.h>
 
@@ -46,6 +45,7 @@
 #include <glib.h>
 
 #include <clutter/clutter.h>
+#include <clutter/clutter-pango.h>
 
 #include "st-entry.h"
 
@@ -116,7 +116,10 @@ static guint entry_signals[LAST_SIGNAL] = { 0, };
 
 G_DEFINE_TYPE_WITH_PRIVATE (StEntry, st_entry, ST_TYPE_WIDGET);
 
-static GType st_entry_accessible_get_type (void) G_GNUC_CONST;
+G_DECLARE_FINAL_TYPE (StEntryAccessible,
+                      st_entry_accessible,
+                      ST, ENTRY_ACCESSIBLE,
+                      StWidgetAccessible)
 
 static void
 st_entry_set_property (GObject      *gobject,
@@ -912,9 +915,7 @@ st_entry_class_init (StEntryClass *klass)
    * The internal #ClutterText actor supporting the #StEntry.
    */
   props[PROP_CLUTTER_TEXT] =
-    g_param_spec_object ("clutter-text",
-                         "Clutter Text",
-                         "Internal ClutterText actor",
+    g_param_spec_object ("clutter-text", NULL, NULL,
                          CLUTTER_TYPE_TEXT,
                          ST_PARAM_READABLE);
 
@@ -924,9 +925,7 @@ st_entry_class_init (StEntryClass *klass)
    * The #ClutterActor acting as the primary icon at the start of the #StEntry.
    */
   props[PROP_PRIMARY_ICON] =
-    g_param_spec_object ("primary-icon",
-                         "Primary Icon",
-                         "Primary Icon actor",
+    g_param_spec_object ("primary-icon", NULL, NULL,
                          CLUTTER_TYPE_ACTOR,
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -936,9 +935,7 @@ st_entry_class_init (StEntryClass *klass)
    * The #ClutterActor acting as the secondary icon at the end of the #StEntry.
    */
   props[PROP_SECONDARY_ICON] =
-    g_param_spec_object ("secondary-icon",
-                         "Secondary Icon",
-                         "Secondary Icon actor",
+    g_param_spec_object ("secondary-icon", NULL, NULL,
                          CLUTTER_TYPE_ACTOR,
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -949,10 +946,7 @@ st_entry_class_init (StEntryClass *klass)
    * will replace the actor of #StEntry::hint-actor.
    */
   props[PROP_HINT_TEXT] =
-    g_param_spec_string ("hint-text",
-                         "Hint Text",
-                         "Text to display when the entry is not focused "
-                         "and the text property is empty",
+    g_param_spec_string ("hint-text", NULL, NULL,
                          NULL,
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -963,10 +957,7 @@ st_entry_class_init (StEntryClass *klass)
    * this will replace the actor displaying #StEntry:hint-text.
    */
   props[PROP_HINT_ACTOR] =
-    g_param_spec_object ("hint-actor",
-                         "Hint Actor",
-                         "An actor to display when the entry is not focused "
-                         "and the text property is empty",
+    g_param_spec_object ("hint-actor", NULL, NULL,
                          CLUTTER_TYPE_ACTOR,
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -976,9 +967,7 @@ st_entry_class_init (StEntryClass *klass)
    * The current text value of the #StEntry.
    */
   props[PROP_TEXT] =
-    g_param_spec_string ("text",
-                         "Text",
-                         "Text of the entry",
+    g_param_spec_string ("text", NULL, NULL,
                          NULL,
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -989,9 +978,7 @@ st_entry_class_init (StEntryClass *klass)
    * input methods to decide which keys should be presented to the user.
    */
   props[PROP_INPUT_PURPOSE] =
-    g_param_spec_enum ("input-purpose",
-                       "Purpose",
-                       "Purpose of the text field",
+    g_param_spec_enum ("input-purpose", NULL, NULL,
                        CLUTTER_TYPE_INPUT_CONTENT_PURPOSE,
                        CLUTTER_INPUT_CONTENT_PURPOSE_NORMAL,
                        ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
@@ -1004,9 +991,7 @@ st_entry_class_init (StEntryClass *klass)
    * behaviour.
    */
   props[PROP_INPUT_HINTS] =
-    g_param_spec_flags ("input-hints",
-                        "hints",
-                        "Hints for the text field behaviour",
+    g_param_spec_flags ("input-hints", NULL, NULL,
                         CLUTTER_TYPE_INPUT_CONTENT_HINT_FLAGS,
                         0,
                         ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
@@ -1180,12 +1165,16 @@ st_entry_set_text (StEntry     *entry,
  *
  * Returns: (transfer none): the #ClutterText used by @entry
  */
-ClutterActor*
+ClutterText *
 st_entry_get_clutter_text (StEntry *entry)
 {
+  StEntryPrivate *priv;
+
   g_return_val_if_fail (ST_ENTRY (entry), NULL);
 
-  return ((StEntryPrivate *)ST_ENTRY_PRIV (entry))->entry;
+  priv = st_entry_get_instance_private (entry);
+
+  return CLUTTER_TEXT (priv->entry);
 }
 
 /**
@@ -1528,26 +1517,14 @@ st_entry_get_hint_actor (StEntry *entry)
 /******************************************************************************/
 
 #define ST_TYPE_ENTRY_ACCESSIBLE         (st_entry_accessible_get_type ())
-#define ST_ENTRY_ACCESSIBLE(o)           (G_TYPE_CHECK_INSTANCE_CAST ((o), ST_TYPE_ENTRY_ACCESSIBLE, StEntryAccessible))
-#define ST_IS_ENTRY_ACCESSIBLE(o)        (G_TYPE_CHECK_INSTANCE_TYPE ((o), ST_TYPE_ENTRY_ACCESSIBLE))
-#define ST_ENTRY_ACCESSIBLE_CLASS(c)     (G_TYPE_CHECK_CLASS_CAST ((c),    ST_TYPE_ENTRY_ACCESSIBLE, StEntryAccessibleClass))
-#define ST_IS_ENTRY_ACCESSIBLE_CLASS(c)  (G_TYPE_CHECK_CLASS_TYPE ((c),    ST_TYPE_ENTRY_ACCESSIBLE))
-#define ST_ENTRY_ACCESSIBLE_GET_CLASS(o) (G_TYPE_INSTANCE_GET_CLASS ((o),  ST_TYPE_ENTRY_ACCESSIBLE, StEntryAccessibleClass))
 
-typedef struct _StEntryAccessible  StEntryAccessible;
-typedef struct _StEntryAccessibleClass  StEntryAccessibleClass;
 
-struct _StEntryAccessible
+typedef struct _StEntryAccessible
 {
   StWidgetAccessible parent;
-};
+} StEntryAccessible;
 
-struct _StEntryAccessibleClass
-{
-  StWidgetAccessibleClass parent_class;
-};
-
-G_DEFINE_TYPE (StEntryAccessible, st_entry_accessible, ST_TYPE_WIDGET_ACCESSIBLE)
+G_DEFINE_FINAL_TYPE (StEntryAccessible, st_entry_accessible, ST_TYPE_WIDGET_ACCESSIBLE)
 
 static void
 st_entry_accessible_init (StEntryAccessible *self)

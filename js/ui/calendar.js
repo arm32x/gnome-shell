@@ -5,10 +5,7 @@ import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
-import * as Main from './main.js';
 import * as MessageList from './messageList.js';
-import * as MessageTray from './messageTray.js';
-import * as Mpris from './mpris.js';
 import * as PopupMenu from './popupMenu.js';
 import {ensureActorVisibleInScrollView} from '../misc/animationUtils.js';
 
@@ -16,7 +13,6 @@ import {formatDateWithCFormatString} from '../misc/dateUtils.js';
 import {loadInterfaceXML} from '../misc/fileUtils.js';
 
 const SHOW_WEEKDATE_KEY = 'show-weekdate';
-const MAX_NOTIFICATION_BUTTONS = 3;
 
 const NC_ = (context, str) => `${context}\u0004${str}`;
 
@@ -95,11 +91,11 @@ export const EventSourceBase = GObject.registerClass({
     GTypeFlags: GObject.TypeFlags.ABSTRACT,
     Properties: {
         'has-calendars': GObject.ParamSpec.boolean(
-            'has-calendars', 'has-calendars', 'has-calendars',
+            'has-calendars', null, null,
             GObject.ParamFlags.READABLE,
             false),
         'is-loading': GObject.ParamSpec.boolean(
-            'is-loading', 'is-loading', 'is-loading',
+            'is-loading', null, null,
             GObject.ParamFlags.READABLE,
             false),
     },
@@ -763,153 +759,13 @@ export const Calendar = GObject.registerClass({
     }
 });
 
-export const NotificationMessage = GObject.registerClass(
-class NotificationMessage extends MessageList.Message {
-    constructor(notification) {
-        super(notification.source);
-
-        this.notification = notification;
-
-        this.connect('close', () => {
-            this._closed = true;
-            if (this.notification)
-                this.notification.destroy(MessageTray.NotificationDestroyedReason.DISMISSED);
-        });
-        notification.connectObject(
-            'action-added', (_, action) => this._addAction(action),
-            'action-removed', (_, action) => this._removeAction(action),
-            'destroy', () => {
-                this.notification = null;
-                if (!this._closed)
-                    this.close();
-            }, this);
-
-        notification.bind_property('title',
-            this, 'title',
-            GObject.BindingFlags.SYNC_CREATE);
-        notification.bind_property('body',
-            this, 'body',
-            GObject.BindingFlags.SYNC_CREATE);
-        notification.bind_property('use-body-markup',
-            this, 'use-body-markup',
-            GObject.BindingFlags.SYNC_CREATE);
-        notification.bind_property('datetime',
-            this, 'datetime',
-            GObject.BindingFlags.SYNC_CREATE);
-        notification.bind_property('gicon',
-            this, 'icon',
-            GObject.BindingFlags.SYNC_CREATE);
-
-        this._actions = new Map();
-        this.notification.actions.forEach(action => {
-            this._addAction(action);
-        });
-    }
-
-    vfunc_clicked() {
-        this.notification.activate();
-    }
-
-    canClose() {
-        return true;
-    }
-
-    _addAction(action) {
-        if (!this._buttonBox) {
-            this._buttonBox = new St.BoxLayout({
-                x_expand: true,
-                style_class: 'notification-buttons-bin',
-            });
-            this.setActionArea(this._buttonBox);
-            global.focus_manager.add_group(this._buttonBox);
-        }
-
-        if (this._buttonBox.get_n_children() >= MAX_NOTIFICATION_BUTTONS)
-            return;
-
-        const button = new St.Button({
-            style_class: 'notification-button',
-            x_expand: true,
-            label: action.label,
-        });
-
-        button.connect('clicked', () => action.activate());
-
-        this._actions.set(action, button);
-        this._buttonBox.add_child(button);
-    }
-
-    _removeAction(action) {
-        this._actions.get(action)?.destroy();
-        this._actions.delete(action);
-    }
-});
-
-const NotificationSection = GObject.registerClass(
-class NotificationSection extends MessageList.MessageListSection {
-    _init() {
-        super._init();
-
-        this._nUrgent = 0;
-
-        Main.messageTray.connect('source-added', this._sourceAdded.bind(this));
-        Main.messageTray.getSources().forEach(source => {
-            this._sourceAdded(Main.messageTray, source);
-        });
-    }
-
-    get allowed() {
-        return Main.sessionMode.hasNotifications &&
-               !Main.sessionMode.isGreeter;
-    }
-
-    _sourceAdded(tray, source) {
-        source.connectObject('notification-added',
-            this._onNotificationAdded.bind(this), this);
-    }
-
-    _onNotificationAdded(source, notification) {
-        let message = new NotificationMessage(notification);
-
-        let isUrgent = notification.urgency === MessageTray.Urgency.CRITICAL;
-
-        notification.connectObject(
-            'destroy', () => {
-                if (isUrgent)
-                    this._nUrgent--;
-            },
-            'notify::datetime', () => {
-                // The datetime property changes whenever the notification is updated
-                this.moveMessage(message, isUrgent ? 0 : this._nUrgent, this.mapped);
-            }, this);
-
-        if (isUrgent) {
-            // Keep track of urgent notifications to keep them on top
-            this._nUrgent++;
-        } else if (this.mapped) {
-            // Only acknowledge non-urgent notifications in case it
-            // has important actions that are inaccessible when not
-            // shown as banner
-            notification.acknowledged = true;
-        }
-
-        let index = isUrgent ? 0 : this._nUrgent;
-        this.addMessageAtIndex(message, index, this.mapped);
-    }
-
-    vfunc_map() {
-        this._messages.forEach(message => {
-            if (message.notification.urgency !== MessageTray.Urgency.CRITICAL)
-                message.notification.acknowledged = true;
-        });
-        super.vfunc_map();
-    }
-});
-
 const Placeholder = GObject.registerClass(
 class Placeholder extends St.BoxLayout {
     _init() {
-        super._init({style_class: 'message-list-placeholder', vertical: true});
+        super._init({
+            style_class: 'message-list-placeholder',
+            orientation: Clutter.Orientation.VERTICAL,
+        });
         this._date = new Date();
 
         this._icon = new St.Icon({icon_name: 'no-notifications-symbolic'});
@@ -942,8 +798,8 @@ class DoNotDisturbSwitch extends PopupMenu.Switch {
 
 export const CalendarMessageList = GObject.registerClass(
 class CalendarMessageList extends St.Widget {
-    _init() {
-        super._init({
+    constructor() {
+        super({
             style_class: 'message-list',
             layout_manager: new Clutter.BinLayout(),
             x_expand: true,
@@ -954,16 +810,18 @@ class CalendarMessageList extends St.Widget {
         this.add_child(this._placeholder);
 
         let box = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
             y_expand: true,
         });
         this.add_child(box);
 
+        this._messageView = new MessageList.MessageView();
+
         this._scrollView = new St.ScrollView({
-            style_class: 'vfade',
             overlay_scrollbars: true,
             x_expand: true, y_expand: true,
+            child: this._messageView,
         });
         box.add_child(this._scrollView);
 
@@ -999,7 +857,7 @@ class CalendarMessageList extends St.Widget {
             accessible_name: C_('action', 'Clear all notifications'),
         });
         this._clearButton.connect('clicked', () => {
-            this._sectionList.get_children().forEach(s => s.clear());
+            this._messageView.clear();
         });
         hbox.add_child(this._clearButton);
 
@@ -1007,50 +865,40 @@ class CalendarMessageList extends St.Widget {
             this._clearButton, 'visible',
             GObject.BindingFlags.INVERT_BOOLEAN);
 
-        this._sectionList = new St.BoxLayout({
-            style_class: 'message-list-sections',
-            vertical: true,
-            x_expand: true,
-            y_expand: true,
-        });
-        this._sectionList.connectObject(
-            'child-added', this._sync.bind(this),
-            'child-removed', this._sync.bind(this),
-            this);
-        this._scrollView.child = this._sectionList;
-
-        this._mediaSection = new Mpris.MediaSection();
-        this._addSection(this._mediaSection);
-
-        this._notificationSection = new NotificationSection();
-        this._addSection(this._notificationSection);
-
-        Main.sessionMode.connect('updated', this._sync.bind(this));
-    }
-
-    _addSection(section) {
-        section.connectObject(
-            'notify::visible', this._sync.bind(this),
-            'notify::empty', this._sync.bind(this),
-            'notify::can-clear', this._sync.bind(this),
-            'destroy', () => this._sectionList.remove_child(section),
+        this._messageView.connectObject(
             'message-focused', (_s, messageActor) => {
                 ensureActorVisibleInScrollView(this._scrollView, messageActor);
             }, this);
-        this._sectionList.add_child(section);
+
+        this._messageView.bind_property('empty',
+            this._placeholder, 'visible',
+            GObject.BindingFlags.SYNC_CREATE);
+        this._messageView.bind_property('can-clear',
+            this._clearButton, 'reactive',
+            GObject.BindingFlags.SYNC_CREATE);
     }
 
-    _sync() {
-        let sections = this._sectionList.get_children();
-        let visible = sections.some(s => s.allowed);
-        this.visible = visible;
-        if (!visible)
-            return;
+    maybeCollapseMessageGroupForEvent(event) {
+        if (!this._messageView.expandedGroup)
+            return Clutter.EVENT_PROPAGATE;
 
-        let empty = sections.every(s => s.empty || !s.visible);
-        this._placeholder.visible = empty;
+        if (event.type() === Clutter.EventType.KEY_PRESS &&
+            event.get_key_symbol() === Clutter.KEY_Escape) {
+            this._messageView.collapse();
+            return Clutter.EVENT_STOP;
+        }
 
-        let canClear = sections.some(s => s.canClear && s.visible);
-        this._clearButton.reactive = canClear;
+        const targetActor = global.stage.get_event_actor(event);
+        const onScrollbar =
+            this._scrollView.contains(targetActor) &&
+            !this._messageView.contains(targetActor);
+
+        if ((event.type() === Clutter.EventType.BUTTON_PRESS ||
+            event.type() === Clutter.EventType.TOUCH_BEGIN) &&
+            !this._messageView.expandedGroup.contains(targetActor) &&
+            !onScrollbar)
+            this._messageView.collapse();
+
+        return Clutter.EVENT_PROPAGATE;
     }
 });

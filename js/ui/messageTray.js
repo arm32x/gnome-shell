@@ -6,7 +6,6 @@ import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
-import * as Calendar from './calendar.js';
 import * as GnomeSession from '../misc/gnomeSession.js';
 import * as Layout from './layout.js';
 import * as Main from './main.js';
@@ -23,7 +22,7 @@ const HIDE_TIMEOUT = 200;
 const LONGER_HIDE_TIMEOUT = 600;
 
 const MAX_NOTIFICATIONS_IN_QUEUE = 3;
-const MAX_NOTIFICATIONS_PER_SOURCE = 3;
+const MAX_NOTIFICATIONS_PER_SOURCE = 10;
 
 // We delay hiding of the tray if the mouse is within MOUSE_LEFT_ACTOR_THRESHOLD
 // range from the point where it left the tray.
@@ -138,21 +137,21 @@ export const NotificationPolicy = GObject.registerClass({
     GTypeFlags: GObject.TypeFlags.ABSTRACT,
     Properties: {
         'enable': GObject.ParamSpec.boolean(
-            'enable', 'enable', 'enable', GObject.ParamFlags.READABLE, true),
+            'enable', null, null, GObject.ParamFlags.READABLE, true),
         'enable-sound': GObject.ParamSpec.boolean(
-            'enable-sound', 'enable-sound', 'enable-sound',
+            'enable-sound', null, null,
             GObject.ParamFlags.READABLE, true),
         'show-banners': GObject.ParamSpec.boolean(
-            'show-banners', 'show-banners', 'show-banners',
+            'show-banners', null, null,
             GObject.ParamFlags.READABLE, true),
         'force-expanded': GObject.ParamSpec.boolean(
-            'force-expanded', 'force-expanded', 'force-expanded',
+            'force-expanded', null, null,
             GObject.ParamFlags.READABLE, false),
         'show-in-lock-screen': GObject.ParamSpec.boolean(
-            'show-in-lock-screen', 'show-in-lock-screen', 'show-in-lock-screen',
+            'show-in-lock-screen', null, null,
             GObject.ParamFlags.READABLE, false),
         'details-in-lock-screen': GObject.ParamSpec.boolean(
-            'details-in-lock-screen', 'details-in-lock-screen', 'details-in-lock-screen',
+            'details-in-lock-screen', null, null,
             GObject.ParamFlags.READABLE, false),
     },
 }, class NotificationPolicy extends GObject.Object {
@@ -439,6 +438,16 @@ export class Notification extends GObject.Object {
         });
         this._actions.push(action);
         this.emit('action-added', action);
+        return action;
+    }
+
+    removeAction(action) {
+        const index = this._actions.indexOf(action);
+        if (index < 0)
+            throw new Error('Action was already removed previously');
+
+        this._actions.splice(index, 1);
+        this.emit('action-removed', action);
     }
 
     clearActions() {
@@ -485,11 +494,11 @@ export class Notification extends GObject.Object {
 export const Source = GObject.registerClass({
     Properties: {
         'count': GObject.ParamSpec.int(
-            'count', 'count', 'count',
+            'count', null, null,
             GObject.ParamFlags.READABLE,
             0, GLib.MAXINT32, 0),
         'policy': GObject.ParamSpec.object(
-            'policy', 'policy', 'policy',
+            'policy', null, null,
             GObject.ParamFlags.READWRITE,
             NotificationPolicy.$gtype),
     },
@@ -608,63 +617,63 @@ SignalTracker.registerDestroyableType(Source);
 GObject.registerClass({
     Properties: {
         'source': GObject.ParamSpec.object(
-            'source', 'source', 'source',
+            'source', null, null,
             GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT_ONLY,
             Source),
         'title': GObject.ParamSpec.string(
-            'title', 'title', 'title',
+            'title', null, null,
             GObject.ParamFlags.READWRITE,
             null),
         'body': GObject.ParamSpec.string(
-            'body', 'body', 'body',
+            'body', null, null,
             GObject.ParamFlags.READWRITE,
             null),
         'use-body-markup': GObject.ParamSpec.boolean(
-            'use-body-markup', 'use-body-markup', 'use-body-markup',
+            'use-body-markup', null, null,
             GObject.ParamFlags.READWRITE,
             false),
         'gicon': GObject.ParamSpec.object(
-            'gicon', 'gicon', 'gicon',
+            'gicon', null, null,
             GObject.ParamFlags.READWRITE,
             Gio.Icon),
         'icon-name': GObject.ParamSpec.string(
-            'icon-name', 'icon-name', 'icon-name',
+            'icon-name', null, null,
             GObject.ParamFlags.READWRITE,
             null),
         'sound': GObject.ParamSpec.object(
-            'sound', 'sound', 'sound',
+            'sound', null, null,
             GObject.ParamFlags.READWRITE,
             Sound),
         'datetime': GObject.ParamSpec.boxed(
-            'datetime', 'datetime', 'datetime',
+            'datetime', null, null,
             GObject.ParamFlags.READWRITE,
             GLib.DateTime),
         // Unfortunately we can't register new enum types in GJS
         // See: https://gitlab.gnome.org/GNOME/gjs/-/issues/573
         'privacy-scope': GObject.ParamSpec.int(
-            'privacy-scope', 'privacy-scope', 'privacy-scope',
+            'privacy-scope', null, null,
             GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT,
             0, GLib.MAXINT32,
             PrivacyScope.User),
         'urgency': GObject.ParamSpec.int(
-            'urgency', 'urgency', 'urgency',
+            'urgency', null, null,
             GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT,
             0, GLib.MAXINT32,
             Urgency.NORMAL),
         'acknowledged': GObject.ParamSpec.boolean(
-            'acknowledged', 'acknowledged', 'acknowledged',
+            'acknowledged', null, null,
             GObject.ParamFlags.READWRITE,
             false),
         'resident': GObject.ParamSpec.boolean(
-            'resident', 'resident', 'resident',
+            'resident', null, null,
             GObject.ParamFlags.READWRITE,
             false),
         'for-feedback': GObject.ParamSpec.boolean(
-            'for-feedback', 'for-feedback', 'for-feedback',
+            'for-feedback', null, null,
             GObject.ParamFlags.READWRITE,
             false),
         'is-transient': GObject.ParamSpec.boolean(
-            'is-transient', 'is-transient', 'is-transient',
+            'is-transient', null, null,
             GObject.ParamFlags.READWRITE,
             false),
     },
@@ -1109,7 +1118,7 @@ export const MessageTray = GObject.registerClass({
             this.idleMonitor.add_user_active_watch(this._onIdleMonitorBecameActive.bind(this));
         }
 
-        this._banner = new Calendar.NotificationMessage(this._notification);
+        this._banner = new MessageList.NotificationMessage(this._notification);
         this._banner.can_focus = false;
         this._banner._header.expandButton.visible = false;
         this._banner.add_style_class_name('notification-banner');
@@ -1120,7 +1129,7 @@ export const MessageTray = GObject.registerClass({
         this._bannerBin.y = -this._banner.height;
         this.show();
 
-        Meta.disable_unredirect_for_display(global.display);
+        global.compositor.disable_unredirect();
         this._updateShowingNotification();
 
         let [x, y] = global.get_pointer();
@@ -1257,7 +1266,7 @@ export const MessageTray = GObject.registerClass({
 
         this._pointerInNotification = false;
         this._notificationRemoved = false;
-        Meta.enable_unredirect_for_display(global.display);
+        global.compositor.enable_unredirect();
 
         this._banner.destroy();
         this._banner = null;
@@ -1296,7 +1305,7 @@ export function getSystemSource() {
     if (!systemNotificationSource) {
         systemNotificationSource = new Source({
             title: _('System'),
-            iconName: 'emblem-system-symbolic',
+            iconName: 'cog-wheel-symbolic',
         });
 
         systemNotificationSource.connect('destroy', () => {

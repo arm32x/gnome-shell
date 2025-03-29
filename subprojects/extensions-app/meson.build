@@ -1,7 +1,7 @@
 project('gnome-extensions-app',
-  version: '47.0',
+  version: '48.0',
   meson_version: '>= 0.58.0',
-  license: 'GPLv2+'
+  license: 'GPL-2.0-or-later',
 )
 
 if get_option('profile') == 'development'
@@ -48,7 +48,6 @@ schemadir = join_paths(datadir, 'glib-2.0', 'schemas')
 servicedir = join_paths(datadir, 'dbus-1', 'services')
 
 gjs = find_program('gjs')
-appstream_util = find_program('appstream-util', required: false)
 appstreamcli = find_program('appstreamcli', required: false)
 desktop_file_validate = find_program('desktop-file-validate', required: false)
 
@@ -69,12 +68,10 @@ if not meson.is_subproject()
     gtk_update_icon_cache: true
   )
 
-  if appstream_util.found()
-    meson.add_dist_script('build-aux/meson/check-version.py',
-      meson.project_version(),
-      '--type=metainfo',
-      'data/metainfo/org.gnome.Extensions.metainfo.xml.in')
-  endif
+  meson.add_dist_script('build-aux/meson/check-version.py',
+    meson.project_version(),
+    '--type=metainfo',
+    'data/metainfo/org.gnome.Extensions.metainfo.xml.in')
 
   summary_dirs = {
     'prefix': get_option('prefix'),

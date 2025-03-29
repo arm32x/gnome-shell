@@ -32,6 +32,21 @@ foreach desktop_file : desktop_files
   )
 endforeach
 
+desktop_directories = [
+  'X-GNOME-Shell-Utilities.directory',
+  'X-GNOME-Shell-System.directory',
+]
+foreach desktop_directory : desktop_directories
+  i18n.merge_file(
+    input: f'@desktop_directory@.desktop.in',
+    output: desktop_directory,
+    po_dir: po_dir,
+    install: true,
+    install_dir: join_paths(datadir, 'desktop-directories'),
+    type: 'desktop',
+  )
+endforeach
+
 serviceconf = configuration_data()
 serviceconf.set('libexecdir', libexecdir)
 foreach service_file : service_files
@@ -90,6 +105,14 @@ install_data(keybinding_files, install_dir: keysdir)
 
 schemaconf = configuration_data()
 schemaconf.set('GETTEXT_PACKAGE', meson.project_name())
+schemaconf.set('DASH_APPS', run_command(
+  generate_app_list, 'default-apps/dash.txt',
+  check: true,
+).stdout())
+schemaconf.set('APP_GRID_APPS', run_command(
+  generate_app_list, '--pages', 'default-apps/app-grid.txt',
+  check: true,
+).stdout())
 schema = configure_file(
   input: 'org.gnome.shell.gschema.xml.in',
   output: 'org.gnome.shell.gschema.xml',

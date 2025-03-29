@@ -19,19 +19,31 @@ unit_testenv.append('GI_TYPELIB_PATH', gvc_typelib_path, separator: ':')
 unit_testenv.append('GI_TYPELIB_PATH', shell_typelib_path, separator: ':')
 unit_testenv.append('GI_TYPELIB_PATH', st_typelib_path, separator: ':')
 
-unit_tests = [
-    'highlighter',
-    'injectionManager',
-    'insertSorted',
-    'jsParse',
-    'markup',
-    'params',
-    'signalTracker',
-    'url',
-    'versionCompare',
-]
+unit_tests = {
+  'breakManager': {},
+  'extensionUtils': {},
+  'highlighter': {},
+  'injectionManager': {},
+  'insertSorted': {},
+  'jsParse': {},
+  'markup': {},
+  'params': {},
+  'signalTracker': {},
+  'timeLimitsManager': {
+    # The time limits tests hard-code UTC to keep the code brief, so must be
+    # run in UTC
+    'env': { 'TZ': 'UTC' },
+  },
+  'url': {},
+  'versionCompare': {},
+}
 
-foreach test : unit_tests
+foreach test, extra_args : unit_tests
+  local_test_env = unit_testenv
+  foreach var, value : extra_args.get('env', {})
+    local_test_env.append(var, value)
+  endforeach
+
   test(test, jasmine,
     args: [
       '--module',
@@ -41,7 +53,7 @@ foreach test : unit_tests
       'unit/@0@.js'.format(test),
     ],
     suite: 'unit',
-    env: unit_testenv,
+    env: local_test_env,
     protocol: 'tap',
     workdir: meson.current_source_dir())
 endforeach

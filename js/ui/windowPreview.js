@@ -29,7 +29,7 @@ const ICON_TITLE_SPACING = 6;
 export const WindowPreview = GObject.registerClass({
     Properties: {
         'overlay-enabled': GObject.ParamSpec.boolean(
-            'overlay-enabled', 'overlay-enabled', 'overlay-enabled',
+            'overlay-enabled', null, null,
             GObject.ParamFlags.READWRITE,
             true),
     },
@@ -49,17 +49,17 @@ export const WindowPreview = GObject.registerClass({
         this._workspace = workspace;
         this._overviewAdjustment = overviewAdjustment;
 
+        const windowContainer = new Clutter.Actor({
+            pivot_point: new Graphene.Point({x: 0.5, y: 0.5}),
+        });
+
         super._init({
             reactive: true,
             can_focus: true,
             accessible_role: Atk.Role.PUSH_BUTTON,
             offscreen_redirect: Clutter.OffscreenRedirect.AUTOMATIC_FOR_OPACITY,
+            windowContainer,
         });
-
-        const windowContainer = new Clutter.Actor({
-            pivot_point: new Graphene.Point({x: 0.5, y: 0.5}),
-        });
-        this.window_container = windowContainer;
 
         windowContainer.connect('notify::scale-x',
             () => this._adjustOverlayOffsets());
@@ -621,12 +621,20 @@ export const WindowPreview = GObject.registerClass({
         // with a new one on the target workspace.
         const parent = this.get_parent();
         if (parent !== null) {
-            if (this._overlayShown)
+            if (this._overlayShown) {
                 parent.set_child_above_sibling(this, null);
-            else if (this._stackAbove === null)
+            } else if (this._stackAbove === null) {
                 parent.set_child_below_sibling(this, null);
-            else if (!this._stackAbove._overlayShown)
+            } else if (!this._stackAbove._overlayShown) {
                 parent.set_child_above_sibling(this, this._stackAbove);
+            } else {
+                // This window shall still be above this._stackAbove._stackAbove
+                const above = this._stackAbove._stackAbove;
+                if (above === null)
+                    parent.set_child_below_sibling(this, null);
+                else
+                    parent.set_child_above_sibling(this, above);
+            }
         }
     }
 

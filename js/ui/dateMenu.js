@@ -62,7 +62,7 @@ class TodayButton extends St.Button {
         });
 
         const hbox = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
         });
         this.child = hbox;
@@ -117,7 +117,7 @@ class EventsSection extends St.Button {
             x_expand: true,
             child: new St.BoxLayout({
                 style_class: 'events-box',
-                vertical: true,
+                orientation: Clutter.Orientation.VERTICAL,
                 x_expand: true,
             }),
         });
@@ -135,7 +135,7 @@ class EventsSection extends St.Button {
 
         this._eventsList = new St.BoxLayout({
             style_class: 'events-list',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
         });
         this.child.add_child(this._eventsList);
@@ -271,7 +271,7 @@ class EventsSection extends St.Button {
         for (let event of events) {
             const box = new St.BoxLayout({
                 style_class: 'event-box',
-                vertical: true,
+                orientation: Clutter.Orientation.VERTICAL,
             });
             box.add_child(new St.Label({
                 text: event.summary,
@@ -552,7 +552,7 @@ class WeatherSection extends St.Button {
 
         let box = new St.BoxLayout({
             style_class: 'weather-box',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
         });
 
@@ -920,6 +920,18 @@ class DateMenuButton extends PanelMenu.Button {
         this._messageList = new Calendar.CalendarMessageList();
         hbox.add_child(this._messageList);
 
+        // Collapse notification groups when the user clicks outside of the expanded group
+        this.menu.actor.connectObject(
+            'captured-event::button', (_, event) => {
+                return this._messageList.maybeCollapseMessageGroupForEvent(event);
+            },
+            'captured-event::touch', (_, event) => {
+                return this._messageList.maybeCollapseMessageGroupForEvent(event);
+            },
+            'captured-event::key', (_, event) => {
+                return this._messageList.maybeCollapseMessageGroupForEvent(event);
+            });
+
         // Fill up the second column
         const boxLayout = new CalendarColumnLayout([this._calendar, this._date]);
         const vbox = new St.Widget({
@@ -933,7 +945,7 @@ class DateMenuButton extends PanelMenu.Button {
         vbox.add_child(this._calendar);
 
         const displaysBox = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
             style_class: 'datemenu-displays-box',
         });
@@ -1000,5 +1012,7 @@ class DateMenuButton extends PanelMenu.Button {
         // but the corresponding app (clocks, weather); however we can consider
         // that display-specific settings, so re-use "allowSettings" here ...
         this._displaysSection.visible = Main.sessionMode.allowSettings;
+
+        this._messageList.visible = Main.sessionMode.hasNotifications && !Main.sessionMode.isGreeter;
     }
 });

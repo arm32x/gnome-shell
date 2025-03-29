@@ -17,12 +17,11 @@ import {PopupAnimation} from './boxpointer.js';
 
 const DIM_BRIGHTNESS = -0.4;
 const POPUP_ANIMATION_TIME = 400;
-const MENU_BUTTON_BRIGHTNESS = 0.1;
 
 export const QuickSettingsItem = GObject.registerClass({
     Properties: {
         'has-menu': GObject.ParamSpec.boolean(
-            'has-menu', 'has-menu', 'has-menu',
+            'has-menu', null, null,
             GObject.ParamFlags.READWRITE |
             GObject.ParamFlags.CONSTRUCT_ONLY,
             false),
@@ -43,14 +42,14 @@ export const QuickSettingsItem = GObject.registerClass({
 
 export const QuickToggle = GObject.registerClass({
     Properties: {
-        'title': GObject.ParamSpec.string('title', '', '',
+        'title': GObject.ParamSpec.string('title', null, null,
             GObject.ParamFlags.READWRITE,
             null),
-        'subtitle': GObject.ParamSpec.string('subtitle', '', '',
+        'subtitle': GObject.ParamSpec.string('subtitle', null, null,
             GObject.ParamFlags.READWRITE,
             null),
         'icon-name': GObject.ParamSpec.override('icon-name', St.Button),
-        'gicon': GObject.ParamSpec.object('gicon', '', '',
+        'gicon': GObject.ParamSpec.object('gicon', null, null,
             GObject.ParamFlags.READWRITE,
             Gio.Icon),
     },
@@ -104,12 +103,13 @@ export const QuickToggle = GObject.registerClass({
             x_align: Clutter.ActorAlign.START,
             x_expand: true,
         });
+        this.get_accessible().add_relationship(Atk.RelationType.DESCRIBED_BY, this._subtitle.get_accessible());
 
         const titleBox = new St.BoxLayout({
             y_align: Clutter.ActorAlign.CENTER,
             x_align: Clutter.ActorAlign.START,
             x_expand: true,
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
         });
         titleBox.add_child(this._title);
         titleBox.add_child(this._subtitle);
@@ -144,18 +144,18 @@ export const QuickToggle = GObject.registerClass({
 
 export const QuickMenuToggle = GObject.registerClass({
     Properties: {
-        'title': GObject.ParamSpec.string('title', '', '',
+        'title': GObject.ParamSpec.string('title', null, null,
             GObject.ParamFlags.READWRITE,
             null),
-        'subtitle': GObject.ParamSpec.string('subtitle', '', '',
+        'subtitle': GObject.ParamSpec.string('subtitle', null, null,
             GObject.ParamFlags.READWRITE,
             null),
         'icon-name': GObject.ParamSpec.override('icon-name', St.Button),
-        'gicon': GObject.ParamSpec.object('gicon', '', '',
+        'gicon': GObject.ParamSpec.object('gicon', null, null,
             GObject.ParamFlags.READWRITE,
             Gio.Icon),
         'menu-enabled': GObject.ParamSpec.boolean(
-            'menu-enabled', '', '',
+            'menu-enabled', null, null,
             GObject.ParamFlags.READWRITE,
             true),
     },
@@ -166,7 +166,7 @@ export const QuickMenuToggle = GObject.registerClass({
             hasMenu: true,
         });
 
-        this.add_style_class_name('quick-menu-toggle');
+        this.add_style_class_name('quick-toggle-has-menu');
 
         this._box = new St.BoxLayout({x_expand: true});
         this.set_child(this._box);
@@ -176,22 +176,22 @@ export const QuickMenuToggle = GObject.registerClass({
         });
         this._box.add_child(contents);
 
-        // Use an effect to lighten the menu button a bit, so we don't
-        // have to define two full sets of button styles (normal/default)
-        // with slightly different colors
-        const menuHighlight = new Clutter.BrightnessContrastEffect();
-        menuHighlight.set_brightness(MENU_BUTTON_BRIGHTNESS);
+        let separator = new St.Widget({style_class: 'quick-toggle-separator'});
+        this._box.add_child(separator);
 
         this._menuButton = new St.Button({
-            style_class: 'quick-toggle-arrow icon-button',
+            style_class: 'quick-toggle-menu-button icon-button',
             child: new St.Icon({icon_name: 'go-next-symbolic'}),
             accessible_name: _('Open menu'),
-            effect: menuHighlight,
             can_focus: true,
             x_expand: false,
             y_expand: true,
         });
         this._box.add_child(this._menuButton);
+
+        this._menuButton.bind_property('visible',
+            separator, 'visible',
+            GObject.BindingFlags.SYNC_CREATE);
 
         this.bind_property('toggle-mode',
             contents, 'toggle-mode',
@@ -236,19 +236,19 @@ export const QuickMenuToggle = GObject.registerClass({
 export const QuickSlider = GObject.registerClass({
     Properties: {
         'icon-name': GObject.ParamSpec.override('icon-name', St.Button),
-        'gicon': GObject.ParamSpec.object('gicon', '', '',
+        'gicon': GObject.ParamSpec.object('gicon', null, null,
             GObject.ParamFlags.READWRITE,
             Gio.Icon),
         'icon-reactive': GObject.ParamSpec.boolean(
-            'icon-reactive', '', '',
+            'icon-reactive', null, null,
             GObject.ParamFlags.READWRITE,
             false),
         'icon-label': GObject.ParamSpec.string(
-            'icon-label', '', '',
+            'icon-label', null, null,
             GObject.ParamFlags.READWRITE,
             ''),
         'menu-enabled': GObject.ParamSpec.boolean(
-            'menu-enabled', '', '',
+            'menu-enabled', null, null,
             GObject.ParamFlags.READWRITE,
             false),
     },
@@ -294,6 +294,9 @@ export const QuickSlider = GObject.registerClass({
         this.bind_property('icon-reactive',
             this._iconButton, 'reactive',
             GObject.BindingFlags.SYNC_CREATE);
+        this.bind_property('icon-reactive',
+            this._iconButton, 'can-focus',
+            GObject.BindingFlags.SYNC_CREATE);
         this.bind_property('icon-label',
             this._iconButton, 'accessible-name',
             GObject.BindingFlags.SYNC_CREATE);
@@ -334,6 +337,7 @@ export const QuickSlider = GObject.registerClass({
             can_focus: true,
             x_expand: false,
             y_expand: true,
+            accessible_name: _('Open menu'),
         });
         box.add_child(this._menuButton);
 
@@ -517,7 +521,7 @@ class QuickToggleMenu extends PopupMenu.PopupMenuBase {
 const QuickSettingsLayoutMeta = GObject.registerClass({
     Properties: {
         'column-span': GObject.ParamSpec.int(
-            'column-span', '', '',
+            'column-span', null, null,
             GObject.ParamFlags.READWRITE,
             1, GLib.MAXINT32, 1),
     },
@@ -526,15 +530,15 @@ const QuickSettingsLayoutMeta = GObject.registerClass({
 const QuickSettingsLayout = GObject.registerClass({
     Properties: {
         'row-spacing': GObject.ParamSpec.int(
-            'row-spacing', 'row-spacing', 'row-spacing',
+            'row-spacing', null, null,
             GObject.ParamFlags.READWRITE,
             0, GLib.MAXINT32, 0),
         'column-spacing': GObject.ParamSpec.int(
-            'column-spacing', 'column-spacing', 'column-spacing',
+            'column-spacing', null, null,
             GObject.ParamFlags.READWRITE,
             0, GLib.MAXINT32, 0),
         'n-columns': GObject.ParamSpec.int(
-            'n-columns', 'n-columns', 'n-columns',
+            'n-columns', null, null,
             GObject.ParamFlags.READWRITE,
             1, GLib.MAXINT32, 1),
     },

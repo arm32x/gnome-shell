@@ -1,12 +1,12 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*- */
-#ifndef __SHELL_SCREENSHOT_H__
-#define __SHELL_SCREENSHOT_H__
+#pragma once
 
 #include <mtk/mtk.h>
 
 /**
- * SECTION:shell-screenshot
- * @short_description: Grabs screenshots of areas and/or windows
+ * ShellScreenshot:
+ *
+ * Grabs screenshots of areas and/or windows
  *
  * The #ShellScreenshot object is used to take screenshots of screen
  * areas or windows and write them out as png files.
@@ -88,5 +88,3 @@ void shell_screenshot_composite_to_stream (CoglTexture         *texture,
                                            gpointer             user_data);
 GdkPixbuf *shell_screenshot_composite_to_stream_finish (GAsyncResult  *result,
                                                         GError       **error);
-
-#endif /* ___SHELL_SCREENSHOT_H__ */

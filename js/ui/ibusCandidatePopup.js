@@ -29,7 +29,7 @@ const CandidateArea = GObject.registerClass({
 }, class CandidateArea extends St.BoxLayout {
     _init() {
         super._init({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             reactive: true,
             visible: false,
         });
@@ -100,13 +100,13 @@ const CandidateArea = GObject.registerClass({
         this._orientation = orientation;
 
         if (this._orientation === IBus.Orientation.HORIZONTAL) {
-            this.vertical = false;
+            this.orientation = Clutter.Orientation.HORIZONTAL;
             this.remove_style_class_name('vertical');
             this.add_style_class_name('horizontal');
             this._previousButton.icon_name = 'go-previous-symbolic';
             this._nextButton.icon_name = 'go-next-symbolic';
         } else {                // VERTICAL || SYSTEM
-            this.vertical = true;
+            this.orientation = Clutter.Orientation.VERTICAL;
             this.add_style_class_name('vertical');
             this.remove_style_class_name('horizontal');
             this._previousButton.icon_name = 'go-up-symbolic';
@@ -158,7 +158,7 @@ class IbusCandidatePopup extends BoxPointer.BoxPointer {
 
         const box = new St.BoxLayout({
             style_class: 'candidate-popup-content',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
         });
         this.bin.set_child(box);
 
@@ -225,8 +225,8 @@ class IbusCandidatePopup extends BoxPointer.BoxPointer {
                 this._setDummyCursorGeometry(
                     windowActor.x + rect.x,
                     windowActor.y + rect.y,
-                    rect.w,
-                    rect.h);
+                    rect.width,
+                    rect.height);
             });
         } catch (e) {
             // Only recent IBus versions have support for this signal

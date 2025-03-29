@@ -25,8 +25,7 @@
 #error "Only <st/st.h> can be included directly.h"
 #endif
 
-#ifndef _ST_ICON
-#define _ST_ICON
+#pragma once
 
 #include <glib-object.h>
 #include <gio/gio.h>
@@ -41,12 +40,6 @@ G_DECLARE_FINAL_TYPE (StIcon, st_icon, ST, ICON, StWidget)
 
 typedef struct _StIconPrivate       StIconPrivate;
 
-/**
- * StIcon:
- *
- * The contents of this structure are private and should only be accessed
- * through the public API.
- */
 struct _StIcon {
   /*< private >*/
   StWidget parent;
@@ -79,6 +72,4 @@ void         st_icon_set_icon_size (StIcon *icon,
 gboolean     st_icon_get_is_symbolic (StIcon *icon);
 
 G_END_DECLS
-
-#endif /* _ST_ICON */
 

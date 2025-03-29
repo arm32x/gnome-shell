@@ -276,6 +276,13 @@ const StreamSlider = GObject.registerClass({
 
         return maxVolume / this._control.get_vol_max_norm();
     }
+
+    showOSD() {
+        const gicon = new Gio.ThemedIcon({name: this.getIcon()});
+        const level = this.getLevel();
+        const maxLevel = this.getMaxLevel();
+        Main.osdWindowManager.show(-1, gicon, null, level, maxLevel);
+    }
 });
 
 const OutputStreamSlider = GObject.registerClass(
@@ -337,8 +344,11 @@ class OutputStreamSlider extends StreamSlider {
         if (hasHeadphones === this._hasHeadphones)
             return;
 
+        const initializing = this._hasHeadphones === undefined;
         this._hasHeadphones = hasHeadphones;
         this._updateIcon();
+        if (!initializing)
+            this.showOSD();
     }
 
     _updateIcon() {
@@ -425,10 +435,7 @@ class VolumeIndicator extends SystemIndicator {
         if (result === Clutter.EVENT_PROPAGATE || item.mapped)
             return result;
 
-        const gicon = new Gio.ThemedIcon({name: item.getIcon()});
-        const level = item.getLevel();
-        const maxLevel = item.getMaxLevel();
-        Main.osdWindowManager.show(-1, gicon, null, level, maxLevel);
+        item.showOSD();
         return result;
     }
 });

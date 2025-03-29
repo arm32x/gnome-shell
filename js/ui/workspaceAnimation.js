@@ -149,7 +149,7 @@ class WorkspaceGroup extends Clutter.Actor {
 export const MonitorGroup = GObject.registerClass({
     Properties: {
         'progress': GObject.ParamSpec.double(
-            'progress', 'progress', 'progress',
+            'progress', null, null,
             GObject.ParamFlags.READWRITE,
             -Infinity, Infinity, 0),
     },
@@ -373,11 +373,11 @@ export class WorkspaceAnimationController {
             switchData.monitors.push(group);
         }
 
-        Meta.disable_unredirect_for_display(global.display);
+        global.compositor.disable_unredirect();
     }
 
     _finishWorkspaceSwitch(switchData) {
-        Meta.enable_unredirect_for_display(global.display);
+        global.compositor.enable_unredirect();
 
         this._switchData = null;
 

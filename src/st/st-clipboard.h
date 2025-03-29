@@ -21,8 +21,7 @@
 #error "Only <st/st.h> can be included directly.h"
 #endif
 
-#ifndef _ST_CLIPBOARD_H
-#define _ST_CLIPBOARD_H
+#pragma once
 
 #include <glib-object.h>
 #include <meta/meta-selection.h>
@@ -34,12 +33,6 @@ G_DECLARE_FINAL_TYPE (StClipboard, st_clipboard, ST, CLIPBOARD, GObject)
 
 typedef struct _StClipboard StClipboard;
 
-/**
- * StClipboard:
- *
- * The contents of this structure is private and should only be accessed using
- * the provided API.
- */
 struct _StClipboard
 {
   /*< private >*/
@@ -101,5 +94,3 @@ void st_clipboard_get_content (StClipboard                    *clipboard,
 void st_clipboard_set_selection (MetaSelection *selection);
 
 G_END_DECLS
-
-#endif /* _ST_CLIPBOARD_H */

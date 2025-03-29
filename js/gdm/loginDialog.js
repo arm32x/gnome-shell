@@ -46,12 +46,14 @@ const _SCROLL_ANIMATION_TIME = 500;
 const _TIMED_LOGIN_IDLE_THRESHOLD = 5.0;
 const _CONFLICTING_SESSION_DIALOG_TIMEOUT = 60;
 
+Gio._promisify(Gio.File.prototype, 'load_contents_async');
+
 export const UserListItem = GObject.registerClass({
     Signals: {'activate': {}},
 }, class UserListItem extends St.Button {
     _init(user) {
         let layout = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
         });
         super._init({
@@ -174,7 +176,7 @@ const UserList = GObject.registerClass({
         });
 
         this._box = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             style_class: 'login-dialog-user-list',
             pseudo_class: 'expanded',
         });
@@ -319,7 +321,7 @@ const SessionMenuButton = GObject.registerClass({
     _init() {
         let button = new St.Button({
             style_class: 'login-dialog-button login-dialog-session-list-button',
-            icon_name: 'emblem-system-symbolic',
+            icon_name: 'cog-wheel-symbolic',
             reactive: true,
             track_hover: true,
             can_focus: true,
@@ -434,7 +436,7 @@ export const ConflictingSessionDialog = GObject.registerClass({
 
         let textLayout = new St.BoxLayout({
             style_class: 'conflicting-session-dialog-content',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
         });
 
@@ -505,9 +507,19 @@ export const LoginDialog = GObject.registerClass({
         this._settings = new Gio.Settings({schema_id: GdmUtil.LOGIN_SCREEN_SCHEMA});
 
         this._settings.connect(`changed::${GdmUtil.BANNER_MESSAGE_KEY}`,
-            this._updateBanner.bind(this));
+            () => this._updateBanner().catch(logError));
         this._settings.connect(`changed::${GdmUtil.BANNER_MESSAGE_TEXT_KEY}`,
-            this._updateBanner.bind(this));
+            () => this._updateBanner().catch(logError));
+        this._settings.connect(`changed::${GdmUtil.BANNER_MESSAGE_SOURCE_KEY}`,
+            () => {
+                if (this._updateBannerMessageFile())
+                    this._updateBanner().catch(logError);
+            });
+        this._settings.connect(`changed::${GdmUtil.BANNER_MESSAGE_PATH_KEY}`,
+            () => {
+                if (this._updateBannerMessageFile())
+                    this._updateBanner().catch(logError);
+            });
         this._settings.connect(`changed::${GdmUtil.DISABLE_USER_LIST_KEY}`,
             this._updateDisableUserList.bind(this));
         this._settings.connect(`changed::${GdmUtil.LOGO_KEY}`,
@@ -521,7 +533,7 @@ export const LoginDialog = GObject.registerClass({
             style_class: 'login-dialog-user-selection-box',
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             visible: false,
         });
         this.add_child(this._userSelectionBox);
@@ -558,7 +570,9 @@ export const LoginDialog = GObject.registerClass({
 
         this._userSelectionBox.add_child(this._notListedButton);
 
-        const bannerBox = new St.BoxLayout({vertical: true});
+        const bannerBox = new St.BoxLayout({
+            orientation: Clutter.Orientation.VERTICAL,
+        });
 
         this._bannerView = new St.ScrollView({
             style_class: 'login-dialog-banner-view',
@@ -574,7 +588,9 @@ export const LoginDialog = GObject.registerClass({
         this._bannerLabel.clutter_text.line_wrap = true;
         this._bannerLabel.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         bannerBox.add_child(this._bannerLabel);
-        this._updateBanner();
+
+        this._updateBannerMessageFile();
+        this._updateBanner().catch(logError);
 
         this._sessionMenuButton = new SessionMenuButton();
         this._sessionMenuButton.connect('session-activated',
@@ -871,11 +887,56 @@ export const LoginDialog = GObject.registerClass({
         this._authPrompt.cancelButton.visible = cancelVisible;
     }
 
-    _updateBanner() {
-        let enabled = this._settings.get_boolean(GdmUtil.BANNER_MESSAGE_KEY);
-        let text = this._settings.get_string(GdmUtil.BANNER_MESSAGE_TEXT_KEY);
+    _updateBannerMessageFile() {
+        const path = this._settings.get_string(GdmUtil.BANNER_MESSAGE_SOURCE_KEY) === 'file'
+            ? this._settings.get_string(GdmUtil.BANNER_MESSAGE_PATH_KEY)
+            : null;
+        const file = path
+            ? Gio.File.new_for_path(path)
+            : null;
 
-        if (enabled && text) {
+        if (!file && !this._bannerMessageFile)
+            return false;
+
+        if (file && this._bannerMessageFile && this._bannerMessageFile.equal(file))
+            return false;
+
+        this._bannerMessageMonitor?.disconnectObject(this);
+        this._bannerMessageMonitor = null;
+
+        this._bannerMessageFile = file;
+
+        if (file) {
+            this._bannerMessageMonitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null);
+            this._bannerMessageMonitor.connectObject(
+                'changed', () => this._updateBanner().catch(logError), this);
+        }
+
+        return true;
+    }
+
+    async _getBannerText() {
+        const enabled = this._settings.get_boolean(GdmUtil.BANNER_MESSAGE_KEY);
+        if (!enabled)
+            return null;
+
+        if (this._bannerMessageFile) {
+            try {
+                const [contents] = await this._bannerMessageFile.load_contents_async(null);
+                return new TextDecoder().decode(contents);
+            } catch (e) {
+                console.error(`Failed to read banner from ${this._bannerMessageFile.get_path()}: ${e.message}`);
+                return null;
+            }
+        }
+
+        return this._settings.get_string(GdmUtil.BANNER_MESSAGE_TEXT_KEY);
+    }
+
+    async _updateBanner() {
+        const text = await this._getBannerText();
+
+        if (text) {
             this._bannerLabel.set_text(text);
             this._bannerLabel.show();
         } else {

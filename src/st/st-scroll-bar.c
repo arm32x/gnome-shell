@@ -21,16 +21,15 @@
  */
 
 /**
- * SECTION:st-scroll-bar
- * @short_description: a user interface element to control scrollable areas.
+ * StScrollBar:
+ *
+ * A user interface element to control scrollable areas.
  *
  * The #StScrollBar allows users to scroll scrollable actors, either by
  * the step or page amount, or by manually dragging the handle.
  */
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
 
 #include <math.h>
 #include <clutter/clutter.h>
@@ -67,7 +66,7 @@ struct _StScrollBarPrivate
   guint             paging_source_id;
   guint             paging_event_no;
 
-  guint             vertical : 1;
+  ClutterOrientation orientation;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (StScrollBar, st_scroll_bar, ST_TYPE_WIDGET)
@@ -79,7 +78,7 @@ enum
   PROP_0,
 
   PROP_ADJUSTMENT,
-  PROP_VERTICAL,
+  PROP_ORIENTATION,
 
   N_PROPS
 };
@@ -103,25 +102,40 @@ handle_button_press_event_cb (ClutterActor *actor,
 
 static void stop_scrolling (StScrollBar *bar);
 
-static void
-st_scroll_bar_set_vertical (StScrollBar *bar,
-                            gboolean     vertical)
+ClutterOrientation
+st_scroll_bar_get_orientation (StScrollBar *bar)
 {
-  StScrollBarPrivate *priv = ST_SCROLL_BAR_PRIVATE (bar);
+  StScrollBarPrivate *priv;
 
-  if (priv->vertical == vertical)
+  g_return_val_if_fail (ST_IS_SCROLL_BAR (bar), CLUTTER_ORIENTATION_HORIZONTAL);
+
+  priv = ST_SCROLL_BAR_PRIVATE (bar);
+  return priv->orientation;
+}
+
+void
+st_scroll_bar_set_orientation (StScrollBar        *bar,
+                               ClutterOrientation  orientation)
+{
+  StScrollBarPrivate *priv;
+
+  g_return_if_fail (ST_IS_SCROLL_BAR (bar));
+
+  priv = ST_SCROLL_BAR_PRIVATE (bar);
+
+  if (priv->orientation == orientation)
     return;
 
-  priv->vertical = vertical;
+  priv->orientation = orientation;
 
-  if (priv->vertical)
+  if (priv->orientation == CLUTTER_ORIENTATION_VERTICAL)
     clutter_actor_set_name (CLUTTER_ACTOR (priv->handle),
                         "vhandle");
   else
     clutter_actor_set_name (CLUTTER_ACTOR (priv->handle),
                         "hhandle");
   clutter_actor_queue_relayout (CLUTTER_ACTOR (bar));
-  g_object_notify_by_pspec (G_OBJECT (bar), props[PROP_VERTICAL]);
+  g_object_notify_by_pspec (G_OBJECT (bar), props[PROP_ORIENTATION]);
 }
 
 static void
@@ -138,8 +152,8 @@ st_scroll_bar_get_property (GObject    *gobject,
       g_value_set_object (value, priv->adjustment);
       break;
 
-    case PROP_VERTICAL:
-      g_value_set_boolean (value, priv->vertical);
+    case PROP_ORIENTATION:
+      g_value_set_enum (value, priv->orientation);
       break;
 
     default:
@@ -162,8 +176,8 @@ st_scroll_bar_set_property (GObject      *gobject,
       st_scroll_bar_set_adjustment (bar, g_value_get_object (value));
       break;
 
-    case PROP_VERTICAL:
-      st_scroll_bar_set_vertical (bar, g_value_get_boolean (value));
+    case PROP_ORIENTATION:
+      st_scroll_bar_set_orientation (bar, g_value_get_enum (value));
       break;
 
     default:
@@ -250,7 +264,7 @@ scroll_bar_allocate_children (StScrollBar           *bar,
       else
         position = (value - lower) / (upper - lower - page_size);
 
-      if (priv->vertical)
+      if (priv->orientation == CLUTTER_ORIENTATION_VERTICAL)
         {
           avail_size = content_box.y2 - content_box.y1;
           handle_size = increment * avail_size;
@@ -310,7 +324,7 @@ st_scroll_bar_get_preferred_width (ClutterActor *self,
   _st_actor_get_preferred_width (priv->handle, for_height, TRUE,
                                  &handle_min_width, &handle_natural_width);
 
-  if (priv->vertical)
+  if (priv->orientation == CLUTTER_ORIENTATION_VERTICAL)
     {
       if (min_width_p)
         *min_width_p = MAX (trough_min_width, handle_min_width);
@@ -350,7 +364,7 @@ st_scroll_bar_get_preferred_height (ClutterActor *self,
   _st_actor_get_preferred_height (priv->handle, for_width, TRUE,
                                   &handle_min_height, &handle_natural_height);
 
-  if (priv->vertical)
+  if (priv->orientation == CLUTTER_ORIENTATION_VERTICAL)
     {
       if (min_height_p)
         *min_height_p = trough_min_height + handle_min_height;
@@ -486,7 +500,7 @@ st_scroll_bar_scroll_event (ClutterActor *actor,
         if (direction == CLUTTER_TEXT_DIRECTION_RTL)
           delta_x *= -1;
 
-        if (priv->vertical)
+        if (priv->orientation == CLUTTER_ORIENTATION_VERTICAL)
           st_adjustment_adjust_for_scroll_event (priv->adjustment, delta_y);
         else
           st_adjustment_adjust_for_scroll_event (priv->adjustment, delta_x);
@@ -533,21 +547,20 @@ st_scroll_bar_class_init (StScrollBarClass *klass)
    * The #StAdjustment controlling the #StScrollBar.
    */
   props[PROP_ADJUSTMENT] =
-    g_param_spec_object ("adjustment", "Adjustment", "The adjustment",
+    g_param_spec_object ("adjustment", NULL, NULL,
                          ST_TYPE_ADJUSTMENT,
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * StScrollBar:vertical:
+   * StScrollBar:orientation:
    *
-   * Whether the #StScrollBar is vertical. If %FALSE it is horizontal.
+   *  The orientation of the #StScrollBar, horizontal or vertical.
    */
-  props[PROP_VERTICAL] =
-    g_param_spec_boolean ("vertical",
-                          "Vertical Orientation",
-                          "Vertical Orientation",
-                          FALSE,
-                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
+  props[PROP_ORIENTATION] =
+    g_param_spec_enum ("orientation", NULL, NULL,
+                       CLUTTER_TYPE_ORIENTATION,
+                       CLUTTER_ORIENTATION_HORIZONTAL,
+                       ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
   g_object_class_install_properties (object_class, N_PROPS, props);
 
@@ -588,6 +601,7 @@ move_slider (StScrollBar *bar,
 {
   StScrollBarPrivate *priv = st_scroll_bar_get_instance_private (bar);
   ClutterTextDirection direction;
+  gboolean vertical;
   gdouble position, lower, upper, page_size;
   gfloat ux, uy, pos, size;
 
@@ -597,7 +611,9 @@ move_slider (StScrollBar *bar,
   if (!clutter_actor_transform_stage_point (priv->trough, x, y, &ux, &uy))
     return;
 
-  if (priv->vertical)
+  vertical = priv->orientation == CLUTTER_ORIENTATION_VERTICAL;
+
+  if (vertical)
     size = clutter_actor_get_height (priv->trough)
            - clutter_actor_get_height (priv->handle);
   else
@@ -607,7 +623,7 @@ move_slider (StScrollBar *bar,
   if (size == 0)
     return;
 
-  if (priv->vertical)
+  if (vertical)
     pos = uy - priv->y_origin;
   else
     pos = ux - priv->x_origin;
@@ -622,7 +638,7 @@ move_slider (StScrollBar *bar,
                             &page_size);
 
   direction = clutter_actor_get_text_direction (CLUTTER_ACTOR (bar));
-  if (!priv->vertical && direction == CLUTTER_TEXT_DIRECTION_RTL)
+  if (!vertical && direction == CLUTTER_TEXT_DIRECTION_RTL)
     pos = size - pos;
 
   position = ((pos / size)
@@ -722,6 +738,7 @@ trough_paging_cb (StScrollBar *self)
 {
   StScrollBarPrivate *priv = st_scroll_bar_get_instance_private (self);
   ClutterTextDirection direction;
+  gboolean vertical;
   g_autoptr (ClutterTransition) transition = NULL;
   StSettings *settings;
   gfloat handle_pos, event_pos, tx, ty;
@@ -731,6 +748,8 @@ trough_paging_cb (StScrollBar *self)
   gboolean ret;
 
   gulong mode;
+
+  vertical = priv->orientation == CLUTTER_ORIENTATION_VERTICAL;
 
   if (priv->paging_event_no == 0)
     {
@@ -769,7 +788,7 @@ trough_paging_cb (StScrollBar *self)
                             &value, NULL, NULL,
                             NULL, &page_increment, NULL);
 
-  if (priv->vertical)
+  if (vertical)
     handle_pos = clutter_actor_get_y (priv->handle);
   else
     handle_pos = clutter_actor_get_x (priv->handle);
@@ -780,10 +799,10 @@ trough_paging_cb (StScrollBar *self)
                                        &tx, &ty);
 
   direction = clutter_actor_get_text_direction (CLUTTER_ACTOR (self));
-  if (!priv->vertical && direction == CLUTTER_TEXT_DIRECTION_RTL)
+  if (!vertical && direction == CLUTTER_TEXT_DIRECTION_RTL)
     page_increment *= -1;
 
-  if (priv->vertical)
+  if (vertical)
     event_pos = ty;
   else
     event_pos = tx;

@@ -25,10 +25,10 @@ Gio._promisify(Gio.DBusConnection.prototype, 'call');
 
 const BackgroundAppMenuItem = GObject.registerClass({
     Properties: {
-        'app': GObject.ParamSpec.object('app', '', '',
+        'app': GObject.ParamSpec.object('app', null, null,
             GObject.ParamFlags.READWRITE,
             Shell.App),
-        'message': GObject.ParamSpec.string('message', '', '',
+        'message': GObject.ParamSpec.string('message', null, null,
             GObject.ParamFlags.READWRITE,
             null),
     },
@@ -49,7 +49,7 @@ const BackgroundAppMenuItem = GObject.registerClass({
         this.app = app;
 
         const box = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
             x_align: Clutter.ActorAlign.START,
             y_align: Clutter.ActorAlign.CENTER,

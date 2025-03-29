@@ -20,10 +20,11 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __ST_THEME_NODE_H__
-#define __ST_THEME_NODE_H__
+#pragma once
 
 #include <clutter/clutter.h>
+#include <pango/pango.h>
+
 #include "st-border-image.h"
 #include "st-icon-colors.h"
 #include "st-shadow.h"
@@ -31,8 +32,9 @@
 G_BEGIN_DECLS
 
 /**
- * SECTION:st-theme-node
- * @short_description: style information for one node in a tree of themed objects
+ * StThemeNode:
+ *
+ * Style information for one node in a tree of themed objects
  *
  * A #StThemeNode represents the CSS style information (the set of CSS properties) for one
  * node in a tree of themed objects. In typical usage, it represents the style information
@@ -342,6 +344,7 @@ gboolean st_theme_node_paint_equal    (StThemeNode *node,
  */
 void st_theme_node_paint (StThemeNode            *node,
                           StThemeNodePaintState  *state,
+                          CoglContext            *cogl_context,
                           ClutterPaintContext    *paint_context,
                           ClutterPaintNode       *root,
                           const ClutterActorBox  *box,
@@ -365,5 +368,3 @@ void st_theme_node_paint_state_set_node (StThemeNodePaintState *state,
                                          StThemeNode           *node);
 
 G_END_DECLS
-
-#endif /* __ST_THEME_NODE_H__ */

@@ -260,11 +260,11 @@ const AppMenuButton = GObject.registerClass({
 
 const WorkspaceDot = GObject.registerClass({
     Properties: {
-        'expansion': GObject.ParamSpec.double('expansion', '', '',
+        'expansion': GObject.ParamSpec.double('expansion', null, null,
             GObject.ParamFlags.READWRITE,
             0.0, 1.0, 0.0),
         'width-multiplier': GObject.ParamSpec.double(
-            'width-multiplier', '', '',
+            'width-multiplier', null, null,
             GObject.ParamFlags.READWRITE,
             1.0, 10.0, 1.0),
     },
@@ -678,9 +678,13 @@ class Panel extends St.Widget {
             _('Top Bar'), 'shell-focus-top-bar-symbolic',
             {sortGroup: CtrlAltTab.SortGroup.TOP});
 
-        Main.sessionMode.connect('updated', this._updatePanel.bind(this));
+        Main.sessionMode.connectObject('updated',
+            this._updatePanel.bind(this),
+            this);
 
-        global.display.connect('workareas-changed', () => this.queue_relayout());
+        global.display.connectObject('workareas-changed',
+            () => this.queue_relayout(),
+            this);
         this._updatePanel();
     }
 

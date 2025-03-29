@@ -23,15 +23,14 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
 #include <clutter/clutter.h>
+#include <clutter/clutter-pango.h>
 
 #include "st-widget.h"
 
@@ -76,8 +75,6 @@ struct _StWidgetPrivate
   gulong texture_file_changed_id;
   guint update_child_styles_id;
 
-  AtkStateSet *local_state_set;
-
   ClutterActor *label_actor;
 
   StWidget *last_visible_child;
@@ -88,11 +85,12 @@ struct _StWidgetPrivate
 };
 
 /**
- * SECTION:st-widget
- * @short_description: Base class for stylable actors
+ * StWidget:
+ *
+ * Base class for stylable actors
  *
  * #StWidget is a simple abstract class on top of #ClutterActor. It
- * provides basic themeing properties.
+ * provides basic theming properties.
  *
  * Actors in the St library should subclass #StWidget if they plan
  * to obey to a certain #StStyle.
@@ -322,7 +320,6 @@ st_widget_finalize (GObject *gobject)
 
   g_free (priv->style_class);
   g_free (priv->pseudo_class);
-  g_object_unref (priv->local_state_set);
   g_free (priv->inline_style);
 
   for (i = 0; i < G_N_ELEMENTS (priv->paint_states); i++)
@@ -404,7 +401,13 @@ st_widget_paint_background (StWidget            *widget,
   ClutterActorBox allocation;
   float resource_scale;
   guint8 opacity;
+  ClutterContext *clutter_context;
+  ClutterBackend *clutter_backend;
+  CoglContext *cogl_context;
 
+  clutter_context = clutter_actor_get_context (CLUTTER_ACTOR (widget));
+  clutter_backend = clutter_context_get_backend (clutter_context);
+  cogl_context = clutter_backend_get_cogl_context (clutter_backend);
   resource_scale = clutter_actor_get_resource_scale (CLUTTER_ACTOR (widget));
 
   theme_node = st_widget_get_theme_node (widget);
@@ -415,6 +418,7 @@ st_widget_paint_background (StWidget            *widget,
 
   if (priv->transition_animation)
     st_theme_node_transition_paint (priv->transition_animation,
+                                    cogl_context,
                                     paint_context,
                                     node,
                                     &allocation,
@@ -423,6 +427,7 @@ st_widget_paint_background (StWidget            *widget,
   else
     st_theme_node_paint (theme_node,
                          current_paint_state (widget),
+                         cogl_context,
                          paint_context,
                          node,
                          &allocation,
@@ -888,27 +893,23 @@ st_widget_class_init (StWidgetClass *klass)
   klass->get_focus_chain = st_widget_real_get_focus_chain;
 
   /**
-   * StWidget:pseudo-class:
+   * StWidget:pseudo-class: (getter get_style_pseudo_class) (setter set_style_pseudo_class):
    *
    * The pseudo-class of the actor. Typical values include "hover", "active",
    * "focus".
    */
   props[PROP_PSEUDO_CLASS] =
-    g_param_spec_string ("pseudo-class",
-                         "Pseudo Class",
-                         "Pseudo class for styling",
+    g_param_spec_string ("pseudo-class", NULL, NULL,
                          "",
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * StWidget:style-class:
+   * StWidget:style-class: (getter get_style_class_name) (setter set_style_class_name):
    *
    * The style-class of the actor for use in styling.
    */
   props[PROP_STYLE_CLASS] =
-    g_param_spec_string ("style-class",
-                         "Style Class",
-                         "Style class for styling",
+    g_param_spec_string ("style-class", NULL, NULL,
                          "",
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -919,9 +920,7 @@ st_widget_class_init (StWidgetClass *klass)
    * CSS properties.
    */
   props[PROP_STYLE] =
-     g_param_spec_string ("style",
-                          "Style",
-                          "Inline style string",
+     g_param_spec_string ("style", NULL, NULL,
                           "",
                           ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -935,9 +934,7 @@ st_widget_class_init (StWidgetClass *klass)
    * widget.
    */
   props[PROP_TRACK_HOVER] =
-     g_param_spec_boolean ("track-hover",
-                           "Track hover",
-                           "Determines whether the widget tracks hover state",
+     g_param_spec_boolean ("track-hover", NULL, NULL,
                            FALSE,
                            ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -949,9 +946,7 @@ st_widget_class_init (StWidgetClass *klass)
    * adjust it manually in any case.
    */
   props[PROP_HOVER] =
-     g_param_spec_boolean ("hover",
-                           "Hover",
-                           "Whether the pointer is hovering over the widget",
+     g_param_spec_boolean ("hover", NULL, NULL,
                            FALSE,
                            ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -961,9 +956,7 @@ st_widget_class_init (StWidgetClass *klass)
    * Whether or not the widget can be focused via keyboard navigation.
    */
   props[PROP_CAN_FOCUS] =
-     g_param_spec_boolean ("can-focus",
-                           "Can focus",
-                           "Whether the widget can be focused via keyboard navigation",
+     g_param_spec_boolean ("can-focus", NULL, NULL,
                            FALSE,
                            ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -973,9 +966,7 @@ st_widget_class_init (StWidgetClass *klass)
    * An actor that labels this widget.
    */
   props[PROP_LABEL_ACTOR] =
-     g_param_spec_object ("label-actor",
-                          "Label",
-                          "Label that identifies this widget",
+     g_param_spec_object ("label-actor", NULL, NULL,
                           CLUTTER_TYPE_ACTOR,
                           ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -1613,7 +1604,6 @@ st_widget_init (StWidget *actor)
 
   priv = st_widget_get_instance_private (actor);
   priv->transition_animation = NULL;
-  priv->local_state_set = atk_state_set_new ();
 
   /* connect style changed */
   g_signal_connect (actor, "notify::name", G_CALLBACK (st_widget_name_notify), NULL);
@@ -1846,17 +1836,21 @@ st_widget_set_hover (StWidget *widget,
 void
 st_widget_sync_hover (StWidget *widget)
 {
+  ClutterContext *context;
+  ClutterBackend *backend;
   ClutterInputDevice *pointer;
   ClutterActor *stage;
   ClutterActor *pointer_actor;
   ClutterSeat *seat;
 
-  seat = clutter_backend_get_default_seat (clutter_get_default_backend ());
-  pointer = clutter_seat_get_pointer (seat);
   stage = clutter_actor_get_stage (CLUTTER_ACTOR (widget));
   if (!stage)
     return;
 
+  context  = clutter_actor_get_context (CLUTTER_ACTOR (widget));
+  backend = clutter_context_get_backend (context);
+  seat = clutter_backend_get_default_seat (backend);
+  pointer = clutter_seat_get_pointer (seat);
   pointer_actor = clutter_stage_get_device_actor (CLUTTER_STAGE (stage), pointer, NULL);
   if (pointer_actor && clutter_actor_get_reactive (CLUTTER_ACTOR (widget)))
     st_widget_set_hover (widget, clutter_actor_contains (CLUTTER_ACTOR (widget), pointer_actor));
@@ -1895,7 +1889,6 @@ st_widget_set_can_focus (StWidget *widget,
                          gboolean  can_focus)
 {
   StWidgetPrivate *priv;
-  AtkObject *accessible;
 
   g_return_if_fail (ST_IS_WIDGET (widget));
 
@@ -1904,13 +1897,14 @@ st_widget_set_can_focus (StWidget *widget,
   if (priv->can_focus != can_focus)
     {
       priv->can_focus = can_focus;
-      accessible = clutter_actor_get_accessible (CLUTTER_ACTOR (widget));
       g_object_notify_by_pspec (G_OBJECT (widget), props[PROP_CAN_FOCUS]);
 
-      if (accessible)
-          atk_object_notify_state_change (accessible,
-                                          ATK_STATE_FOCUSABLE,
-                                          priv->can_focus);
+      if (can_focus)
+        clutter_actor_add_accessible_state (CLUTTER_ACTOR (widget),
+                                            ATK_STATE_FOCUSABLE);
+      else
+        clutter_actor_remove_accessible_state (CLUTTER_ACTOR (widget),
+                                               ATK_STATE_FOCUSABLE);
     }
 }
 
@@ -2388,73 +2382,6 @@ st_widget_set_label_actor (StWidget     *widget,
     }
 }
 
-static void
-notify_accessible_state_change (StWidget     *widget,
-                                AtkStateType  state,
-                                gboolean      value)
-{
-  AtkObject *accessible =
-    clutter_actor_get_accessible (CLUTTER_ACTOR (widget));
-
-  if (accessible != NULL)
-    atk_object_notify_state_change (accessible, state, value);
-}
-
-/**
- * st_widget_add_accessible_state:
- * @widget: A #StWidget
- * @state: #AtkStateType state to add
- *
- * This method adds @state as one of the accessible states for
- * @widget. The list of states of a widget describes the current state
- * of user interface element @widget and is provided so that assistive
- * technologies know how to present @widget to the user.
- *
- * Usually you will have no need to add accessible states for an
- * object, as the accessible object can extract most of the states
- * from the object itself (ie: a #StButton knows when it is pressed).
- * This method is only required when one cannot extract the
- * information automatically from the object itself (i.e.: a generic
- * container used as a toggle menu item will not automatically include
- * the toggled state).
- *
- */
-void
-st_widget_add_accessible_state (StWidget    *widget,
-                                AtkStateType state)
-{
-  StWidgetPrivate *priv;
-
-  g_return_if_fail (ST_IS_WIDGET (widget));
-
-  priv = st_widget_get_instance_private (widget);
-
-  if (atk_state_set_add_state (priv->local_state_set, state))
-    notify_accessible_state_change (widget, state, TRUE);
-}
-
-/**
- * st_widget_remove_accessible_state:
- * @widget: A #StWidget
- * @state: #AtkState state to remove
- *
- * This method removes @state as on of the accessible states for
- * @widget. See st_widget_add_accessible_state() for more information.
- *
- */
-void
-st_widget_remove_accessible_state (StWidget    *widget,
-                                   AtkStateType state)
-{
-  StWidgetPrivate *priv;
-
-  g_return_if_fail (ST_IS_WIDGET (widget));
-
-  priv = st_widget_get_instance_private (widget);
-
-  if (atk_state_set_remove_state (priv->local_state_set, state))
-    notify_accessible_state_change (widget, state, FALSE);
-}
 
 /******************************************************************************/
 /*************************** ACCESSIBILITY SUPPORT ****************************/
@@ -2465,11 +2392,10 @@ st_widget_remove_accessible_state (StWidget    *widget,
 static void st_widget_accessible_dispose    (GObject *gobject);
 
 /* AtkObject */
-static AtkStateSet *st_widget_accessible_ref_state_set (AtkObject *obj);
 static void         st_widget_accessible_initialize    (AtkObject *obj,
                                                         gpointer   data);
 
-struct _StWidgetAccessiblePrivate
+typedef struct _StWidgetAccessiblePrivate
 {
   /* Cached values (used to avoid extra notifications) */
   gboolean selected;
@@ -2479,7 +2405,7 @@ struct _StWidgetAccessiblePrivate
    * relationships between this object and the label
    */
   AtkObject *current_label;
-};
+} StWidgetAccessiblePrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (StWidgetAccessible, st_widget_accessible, CLUTTER_TYPE_ACTOR_ACCESSIBLE)
 
@@ -2491,28 +2417,22 @@ st_widget_accessible_class_init (StWidgetAccessibleClass *klass)
 
   gobject_class->dispose = st_widget_accessible_dispose;
 
-  atk_class->ref_state_set = st_widget_accessible_ref_state_set;
   atk_class->initialize = st_widget_accessible_initialize;
 }
 
 static void
 st_widget_accessible_init (StWidgetAccessible *self)
 {
-  StWidgetAccessiblePrivate *priv = st_widget_accessible_get_instance_private (self);
-
-  self->priv = priv;
 }
 
 static void
 st_widget_accessible_dispose (GObject *gobject)
 {
   StWidgetAccessible *self = ST_WIDGET_ACCESSIBLE (gobject);
+  StWidgetAccessiblePrivate *priv =
+    st_widget_accessible_get_instance_private (self);
 
-  if (self->priv->current_label)
-    {
-      g_object_unref (self->priv->current_label);
-      self->priv->current_label = NULL;
-    }
+  g_clear_object (&priv->current_label);
 
   G_OBJECT_CLASS (st_widget_accessible_parent_class)->dispose (gobject);
 }
@@ -2529,59 +2449,6 @@ st_widget_accessible_initialize (AtkObject *obj,
    */
   check_pseudo_class (ST_WIDGET (data));
   check_labels (ST_WIDGET (data));
-}
-
-static AtkStateSet *
-st_widget_accessible_ref_state_set (AtkObject *obj)
-{
-  AtkStateSet *result = NULL;
-  AtkStateSet *aux_set = NULL;
-  ClutterActor *actor = NULL;
-  StWidget *widget = NULL;
-  StWidgetPrivate *widget_priv;
-  StWidgetAccessible *self = NULL;
-
-  result = ATK_OBJECT_CLASS (st_widget_accessible_parent_class)->ref_state_set (obj);
-
-  actor = CLUTTER_ACTOR (atk_gobject_accessible_get_object (ATK_GOBJECT_ACCESSIBLE (obj)));
-
-  if (actor == NULL) /* State is defunct */
-    return result;
-
-  widget = ST_WIDGET (actor);
-  self = ST_WIDGET_ACCESSIBLE (obj);
-  widget_priv = st_widget_get_instance_private (widget);
-
-  /* priv->selected should be properly updated on the
-   * ATK_STATE_SELECTED notification callbacks
-   */
-  if (self->priv->selected)
-    atk_state_set_add_state (result, ATK_STATE_SELECTED);
-
-  if (self->priv->checked)
-    atk_state_set_add_state (result, ATK_STATE_CHECKED);
-
-  /* On clutter there isn't any tip to know if a actor is focusable or
-   * not, anyone can receive the key_focus. For this reason
-   * cally_actor sets any actor as FOCUSABLE. This is not the case on
-   * St, where we have can_focus. But this means that we need to
-   * remove the state FOCUSABLE if it is not focusable
-   */
-  if (st_widget_get_can_focus (widget))
-    atk_state_set_add_state (result, ATK_STATE_FOCUSABLE);
-  else
-    atk_state_set_remove_state (result, ATK_STATE_FOCUSABLE);
-
-  /* We add the states added externally if required */
-  if (!atk_state_set_is_empty (widget_priv->local_state_set))
-    {
-      aux_set = atk_state_set_or_sets (result, widget_priv->local_state_set);
-
-      g_object_unref (result); /* previous result will not be used */
-      result = aux_set;
-    }
-
-  return result;
 }
 
 /*
@@ -2612,16 +2479,19 @@ check_pseudo_class (StWidget *widget)
   if (!accessible)
     return;
 
-  priv = ST_WIDGET_ACCESSIBLE (accessible)->priv;
+  priv = st_widget_accessible_get_instance_private (ST_WIDGET_ACCESSIBLE (accessible));
   found = st_widget_has_style_pseudo_class (widget,
                                             "selected");
 
   if (found != priv->selected)
     {
       priv->selected = found;
-      atk_object_notify_state_change (accessible,
-                                      ATK_STATE_SELECTED,
-                                      found);
+      if (priv->selected)
+        clutter_actor_add_accessible_state (CLUTTER_ACTOR (widget),
+                                            ATK_STATE_SELECTED);
+      else
+        clutter_actor_remove_accessible_state (CLUTTER_ACTOR (widget),
+                                               ATK_STATE_SELECTED);
     }
 
   found = st_widget_has_style_pseudo_class (widget,
@@ -2629,9 +2499,12 @@ check_pseudo_class (StWidget *widget)
   if (found != priv->checked)
     {
       priv->checked = found;
-      atk_object_notify_state_change (accessible,
-                                      ATK_STATE_CHECKED,
-                                      found);
+      if (priv->checked)
+        clutter_actor_add_accessible_state (CLUTTER_ACTOR (widget),
+                                            ATK_STATE_CHECKED);
+      else
+        clutter_actor_remove_accessible_state (CLUTTER_ACTOR (widget),
+                                               ATK_STATE_CHECKED);
     }
 }
 
@@ -2647,7 +2520,7 @@ check_labels (StWidget *widget)
   if (!accessible)
     return;
 
-  priv = ST_WIDGET_ACCESSIBLE (accessible)->priv;
+  priv = st_widget_accessible_get_instance_private (ST_WIDGET_ACCESSIBLE (accessible));
 
   /* We only call this method at startup, and when the label changes,
    * so it is fine to remove the previous relationships if we have the
@@ -2694,7 +2567,7 @@ check_labels (StWidget *widget)
  *
  * Gets a list of the focusable children of @widget, in "Tab"
  * order. By default, this returns all visible
- * (as in clutter_actor_is_visible()) children of @widget.
+ * (as in [method@Clutter.Actor.is_visible]) children of @widget.
  *
  * Returns: (element-type Clutter.Actor) (transfer container):
  *   @widget's focusable children

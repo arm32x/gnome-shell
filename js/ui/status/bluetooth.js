@@ -1,5 +1,6 @@
 import 'gi://GnomeBluetooth?version=3.0';
 
+import Atk from 'gi://Atk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GnomeBluetooth from 'gi://GnomeBluetooth';
@@ -27,13 +28,13 @@ const STATE_CHANGE_FAILED_TIMEOUT_MS = 30 * 1000;
 
 const BtClient = GObject.registerClass({
     Properties: {
-        'available': GObject.ParamSpec.boolean('available', '', '',
+        'available': GObject.ParamSpec.boolean('available', null, null,
             GObject.ParamFlags.READABLE,
             false),
-        'active': GObject.ParamSpec.boolean('active', '', '',
+        'active': GObject.ParamSpec.boolean('active', null, null,
             GObject.ParamFlags.READABLE,
             false),
-        'adapter-state': GObject.ParamSpec.enum('adapter-state', '', '',
+        'adapter-state': GObject.ParamSpec.enum('adapter-state', null, null,
             GObject.ParamFlags.READABLE,
             AdapterState, AdapterState.ABSENT),
     },
@@ -247,12 +248,25 @@ class BluetoothDeviceItem extends PopupMenu.PopupBaseMenuItem {
 
         this.connect('destroy', () => (this._spinner = null));
         this.connect('activate', () => this._toggleConnected().catch(logError));
+        this._device.connectObject(
+            'notify::alias', () => this._updateAccessibleName(),
+            'notify::connected', () => this._updateAccessibleName(),
+            this);
+        this._updateAccessibleName();
     }
 
     async _toggleConnected() {
         this._spinner.play();
         await this._client.toggleDevice(this._device);
         this._spinner?.stop();
+    }
+
+    _updateAccessibleName() {
+        this.accessible_name = this._device.connected
+            // Translators: %s is a device name like "MyPhone"
+            ? _('Disconnect %s').format(this._device.alias)
+            // Translators: %s is a device name like "MyPhone"
+            : _('Connect to %s').format(this._device.alias);
     }
 });
 
@@ -335,9 +349,19 @@ class BluetoothToggle extends QuickMenuToggle {
             : _('Turn on Bluetooth to connect to devices');
     }
 
+    _updatePlaceholderRelation() {
+        const accel = this.get_accessible();
+        const placeholderAccel = this._placeholderItem.get_accessible();
+        if (this._deviceSection.actor.visible)
+            accel.remove_relationship(Atk.RelationType.DESCRIBED_BY, placeholderAccel);
+        else
+            accel.add_relationship(Atk.RelationType.DESCRIBED_BY, placeholderAccel);
+    }
+
     _updateDeviceVisibility() {
         this._deviceSection.actor.visible =
             [...this._deviceItems.values()].some(item => item.visible);
+        this._updatePlaceholderRelation();
     }
 
     _getSortedDevices() {

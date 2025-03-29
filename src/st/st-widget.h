@@ -25,8 +25,7 @@
 #error "Only <st/st.h> can be included directly.h"
 #endif
 
-#ifndef __ST_WIDGET_H__
-#define __ST_WIDGET_H__
+#pragma once
 
 #include <clutter/clutter.h>
 #include <st/st-types.h>
@@ -148,11 +147,4 @@ void                  st_widget_paint_background          (StWidget            *
 /* debug methods */
 char  *st_describe_actor       (ClutterActor *actor);
 
-/* accessibility methods */
-void                  st_widget_add_accessible_state     (StWidget    *widget,
-                                                          AtkStateType state);
-void                  st_widget_remove_accessible_state  (StWidget    *widget,
-                                                          AtkStateType state);
 G_END_DECLS
-
-#endif /* __ST_WIDGET_H__ */

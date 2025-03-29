@@ -105,57 +105,43 @@ class ATIndicator extends PanelMenu.Button {
         GLib.Source.set_name_by_id(this._syncMenuVisibilityIdle, '[gnome-shell] this._syncMenuVisibility');
     }
 
-    _buildItemExtended(string, initialValue, writable, onSet) {
-        let widget = new PopupMenu.PopupSwitchMenuItem(string, initialValue);
-        if (!writable) {
-            widget.reactive = false;
-        } else {
-            widget.connect('toggled', item => {
-                onSet(item.state);
-            });
-        }
-        return widget;
-    }
-
     _buildItem(string, schema, key) {
-        let settings = new Gio.Settings({schema_id: schema});
-        let widget = this._buildItemExtended(string,
-            settings.get_boolean(key),
-            settings.is_writable(key),
-            enabled => settings.set_boolean(key, enabled));
+        const settings = new Gio.Settings({schema_id: schema});
+        const widget = new PopupMenu.PopupSwitchMenuItem(string, false);
+        settings.bind(key, widget, 'state', Gio.SettingsBindFlags.DEFAULT);
 
-        settings.connect(`changed::${key}`, () => {
-            widget.setToggleState(settings.get_boolean(key));
-
-            this._queueSyncMenuVisibility();
-        });
+        widget.connect('toggled',
+            () => this._queueSyncMenuVisibility());
 
         return widget;
     }
 
     _buildFontItem() {
-        let settings = new Gio.Settings({schema_id: DESKTOP_INTERFACE_SCHEMA});
+        const settings = new Gio.Settings({schema_id: DESKTOP_INTERFACE_SCHEMA});
         let factor = settings.get_double(KEY_TEXT_SCALING_FACTOR);
-        let initialSetting = factor > 1.0;
-        let widget = this._buildItemExtended(_('Large Text'),
-            initialSetting,
-            settings.is_writable(KEY_TEXT_SCALING_FACTOR),
-            enabled => {
-                if (enabled) {
-                    settings.set_double(
-                        KEY_TEXT_SCALING_FACTOR, DPI_FACTOR_LARGE);
-                } else {
-                    settings.reset(KEY_TEXT_SCALING_FACTOR);
-                }
-            });
+        const widget =
+            new PopupMenu.PopupSwitchMenuItem(_('Large Text'), factor > 1.0);
+
+        const toggledId = widget.connect('toggled', item => {
+            if (item.state)
+                settings.set_double(KEY_TEXT_SCALING_FACTOR, DPI_FACTOR_LARGE);
+            else
+                settings.reset(KEY_TEXT_SCALING_FACTOR);
+        });
 
         settings.connect(`changed::${KEY_TEXT_SCALING_FACTOR}`, () => {
             factor = settings.get_double(KEY_TEXT_SCALING_FACTOR);
             let active = factor > 1.0;
+
+            widget.block_signal_handler(toggledId);
             widget.setToggleState(active);
+            widget.unblock_signal_handler(toggledId);
 
             this._queueSyncMenuVisibility();
         });
+        settings.bind_writable(KEY_TEXT_SCALING_FACTOR,
+            widget, 'sensitive',
+            false);
 
         return widget;
     }

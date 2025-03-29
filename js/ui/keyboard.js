@@ -124,7 +124,7 @@ class Suggestions extends St.BoxLayout {
     _init() {
         super._init({
             style_class: 'word-suggestions',
-            vertical: false,
+            orientation: Clutter.Orientation.HORIZONTAL,
             x_align: Clutter.ActorAlign.CENTER,
         });
         this.show();
@@ -227,7 +227,7 @@ const Key = GObject.registerClass({
     },
 }, class Key extends St.BoxLayout {
     _init(params, extendedKeys = []) {
-        const {label, iconName, commitString, keyval} = {keyval: 0, ...params};
+        const {label, iconName, commitString, keyval, hasAction} = {keyval: 0, ...params};
         super._init({style_class: 'key-container'});
 
         this._keyval = parseInt(keyval, 16);
@@ -243,6 +243,7 @@ const Key = GObject.registerClass({
         this._extendedKeyboard = null;
         this._pressTimeoutId = 0;
         this._capturedPress = false;
+        this._hasAction = hasAction;
     }
 
     get iconName() {
@@ -275,7 +276,7 @@ const Key = GObject.registerClass({
         this._boxPointer.setPosition(this.keyButton, 0.5);
 
         // Adds style to existing keyboard style to avoid repetition
-        this._boxPointer.add_style_class_name('keyboard-subkeys');
+        this._boxPointer.add_style_class_name('keyboard-subkeys-boxpointer');
         this._getExtendedKeys();
         this.keyButton._extendedKeys = this._extendedKeyboard;
     }
@@ -316,8 +317,8 @@ const Key = GObject.registerClass({
                 this.emit('keyval', this._keyval);
             else if (commitString)
                 this.emit('commit', commitString);
-            else
-                console.error('Need keyval or commitString');
+            else if (!this._hasAction)
+                console.error('Need keyval, commitString or an action');
         }
 
         this.emit('released');
@@ -434,7 +435,7 @@ const Key = GObject.registerClass({
     _getExtendedKeys() {
         this._extendedKeyboard = new St.BoxLayout({
             style_class: 'key-container',
-            vertical: false,
+            orientation: Clutter.Orientation.HORIZONTAL,
         });
         for (let i = 0; i < this._extendedKeys.length; ++i) {
             let extendedKey = this._extendedKeys[i];
@@ -587,7 +588,7 @@ class FocusTracker extends Signals.EventEmitter {
 const EmojiPager = GObject.registerClass({
     Properties: {
         'delta': GObject.ParamSpec.int(
-            'delta', 'delta', 'delta',
+            'delta', null, null,
             GObject.ParamFlags.READWRITE,
             GLib.MININT32, GLib.MAXINT32, 0),
     },
@@ -1002,7 +1003,7 @@ const EmojiSelection = GObject.registerClass({
 
         row.appendRow();
 
-        key = new Key({label: 'ABC'}, []);
+        key = new Key({label: 'ABC', hasAction: true}, []);
         key.keyButton.add_style_class_name('default-key');
         key.connect('released', () => this.emit('toggle'));
         row.appendKey(key, 1.5);
@@ -1017,7 +1018,7 @@ const EmojiSelection = GObject.registerClass({
             section.button = key;
         }
 
-        key = new Key({iconName: 'keyboard-hide-symbolic'});
+        key = new Key({iconName: 'osk-hide-symbolic', hasAction: true});
         key.keyButton.add_style_class_name('default-key');
         key.keyButton.add_style_class_name('hide-key');
         key.connect('released', () => {
@@ -1059,7 +1060,7 @@ export class KeyboardManager extends Signals.EventEmitter {
         this._a11yApplicationsSettings = new Gio.Settings({schema_id: A11Y_APPLICATIONS_SCHEMA});
         this._a11yApplicationsSettings.connect('changed', this._syncEnabled.bind(this));
 
-        this._seat = Clutter.get_default_backend().get_default_seat();
+        this._seat = global.stage.context.get_backend().get_default_seat();
         this._seat.connect('notify::touch-mode', this._syncEnabled.bind(this));
 
         this._lastDevice = null;
@@ -1185,7 +1186,7 @@ export const Keyboard = GObject.registerClass({
             // the locale setting in order to avoid flipping the
             // keyboard on RTL locales.
             text_direction: Clutter.TextDirection.LTR,
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
         });
         this._focusInExtendedKeys = false;
         this._emojiActive = false;
@@ -1243,7 +1244,7 @@ export const Keyboard = GObject.registerClass({
     _onFocusPositionChanged(focusTracker) {
         let rect = focusTracker.getCurrentRect();
         this.setCursorLocation(focusTracker.currentWindow, rect.x, rect.y, rect.width, rect.height);
-        this._updateLevelFromHints();
+        this._updateLevelFromHints(true);
     }
 
     _onDestroy() {
@@ -1320,10 +1321,10 @@ export const Keyboard = GObject.registerClass({
 
     _onContentHintsChanged(controller, contentHint) {
         this._contentHint = contentHint;
-        this._updateLevelFromHints();
+        this._updateLevelFromHints(false);
     }
 
-    _updateLevelFromHints() {
+    _updateLevelFromHints(userInputHappened) {
         // If the latch is enabled, avoid level changes
         if (this._latched)
             return;
@@ -1338,10 +1339,15 @@ export const Keyboard = GObject.registerClass({
 
         if ((this._contentHint & Clutter.InputContentHintFlags.UPPERCASE) !== 0) {
             this._setActiveLevel('shift');
-        } else if (!this._surroundingTextId &&
-                   (this._contentHint &
-                    (Clutter.InputContentHintFlags.AUTO_CAPITALIZATION |
-                     Clutter.InputContentHintFlags.TITLECASE)) !== 0) {
+            return;
+        }
+
+        if ((this._contentHint &
+             (Clutter.InputContentHintFlags.AUTO_CAPITALIZATION |
+              Clutter.InputContentHintFlags.TITLECASE)) !== 0) {
+            if (this._surroundingTextId)
+                return;
+
             this._surroundingTextId =
                 Main.inputMethod.connect('surrounding-text-set', () => {
                     const [text, cursor] = Main.inputMethod.getSurroundingText();
@@ -1369,7 +1375,11 @@ export const Keyboard = GObject.registerClass({
                     this._surroundingTextId = 0;
                 });
             Main.inputMethod.request_surrounding();
+            return;
         }
+
+        if (userInputHappened && this._currentPage === this._layers['shift'])
+            this._setActiveLevel('default');
     }
 
     _onKeyFocusChanged() {
@@ -1489,34 +1499,14 @@ export const Keyboard = GObject.registerClass({
                 label: key.label,
                 iconName: key.iconName,
                 keyval: key.keyval,
+                hasAction: !!key.action,
             }, strings);
 
-            if (key.keyval) {
-                button.connect('keyval', (_actor, keyval) => {
-                    this._keyboardController.keyvalPress(keyval);
-                    this._keyboardController.keyvalRelease(keyval);
-                });
-            }
-
-            if (key.action !== 'modifier') {
-                button.connect('commit', (_actor, str) => {
-                    this._keyboardController.commit(str, this._modifiers).then(() => {
-                        this._disableAllModifiers();
-                        if (layout.mode === 'default' ||
-                            (layout.mode === 'latched' && !this._latched)) {
-                            if (this._contentHint !== 0)
-                                this._updateLevelFromHints();
-                            else
-                                this._setActiveLevel('default');
-                        }
-                    }).catch(console.error);
-                });
-            }
-
-            if (key.action !== null) {
+            if (key.action) {
                 button.connect('released', () => {
                     if (key.action === 'hide') {
                         this.close(true);
+                        this._updateLevelFromHints(true);
                     } else if (key.action === 'languageMenu') {
                         this._popupLanguageMenu(button);
                     } else if (key.action === 'emoji') {
@@ -1526,19 +1516,33 @@ export const Keyboard = GObject.registerClass({
                     } else if (key.action === 'delete') {
                         this._keyboardController.toggleDelete(true);
                         this._keyboardController.toggleDelete(false);
+                        this._updateLevelFromHints(true);
                     } else if (!this._longPressed && key.action === 'levelSwitch') {
                         this._setActiveLevel(key.level);
                         this._setLatched(
                             key.level === 1 &&
-                                key.iconName === 'keyboard-caps-lock-symbolic');
+                                key.iconName === 'osk-caps-lock-symbolic');
                     }
 
                     this._longPressed = false;
                 });
+            } else if (key.keyval) {
+                button.connect('keyval', (_actor, keyval) => {
+                    this._keyboardController.keyvalPress(keyval);
+                    this._keyboardController.keyvalRelease(keyval);
+                    this._updateLevelFromHints(true);
+                });
+            } else {
+                button.connect('commit', (_actor, str) => {
+                    this._keyboardController.commit(str, this._modifiers).then(() => {
+                        this._disableAllModifiers();
+                        this._updateLevelFromHints(true);
+                    }).catch(console.error);
+                });
             }
 
             if (key.action === 'levelSwitch' &&
-                key.iconName === 'keyboard-shift-symbolic') {
+                key.iconName === 'osk-shift-symbolic') {
                 layout.shiftKeys.push(button);
                 if (key.level === 'shift') {
                     button.connect('long-press', () => {
@@ -1621,7 +1625,7 @@ export const Keyboard = GObject.registerClass({
             let key = layout.shiftKeys[i];
             key.setLatched(latched);
             key.iconName = latched
-                ? 'keyboard-caps-lock-symbolic' : 'keyboard-shift-symbolic';
+                ? 'osk-caps-lock-symbolic' : 'osk-shift-symbolic';
         }
     }
 
@@ -1786,7 +1790,7 @@ export const Keyboard = GObject.registerClass({
     }
 
     _animateShow() {
-        Meta.disable_unredirect_for_display(global.display);
+        global.compositor.disable_unredirect();
 
         if (this._focusWindow)
             this._animateWindow(this._focusWindow, true);
@@ -1842,7 +1846,7 @@ export const Keyboard = GObject.registerClass({
 
     _animateHideComplete() {
         Main.layoutManager.keyboardBox.hide();
-        Meta.enable_unredirect_for_display(global.display);
+        global.compositor.enable_unredirect();
     }
 
     gestureProgress(delta) {
@@ -1982,7 +1986,7 @@ class KeyboardController extends Signals.EventEmitter {
     constructor() {
         super();
 
-        let seat = Clutter.get_default_backend().get_default_seat();
+        let seat = global.stage.context.get_backend().get_default_seat();
         this._virtualDevice = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
 
         this._inputSourceManager = InputSourceManager.getInputSourceManager();

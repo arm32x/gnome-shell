@@ -31,7 +31,7 @@ class OverviewActor extends St.BoxLayout {
             /* Translators: This is the main view to select
                 activities. See also note for "Activities" string. */
             accessible_name: _('Overview'),
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
         });
 
         this.add_constraint(new LayoutManager.MonitorConstraint({primary: true}));
@@ -249,9 +249,9 @@ export class Overview extends Signals.EventEmitter {
         }
 
         if (this._shownState === OverviewShownState.HIDDEN)
-            Meta.disable_unredirect_for_display(global.display);
+            global.compositor.disable_unredirect();
         else if (state === OverviewShownState.HIDDEN)
-            Meta.enable_unredirect_for_display(global.display);
+            global.compositor.enable_unredirect();
 
         this._shownState = state;
         this.emit(OVERVIEW_SHOWN_TRANSITIONS[state].signal);

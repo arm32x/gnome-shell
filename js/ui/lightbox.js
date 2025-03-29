@@ -1,4 +1,5 @@
 import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
 import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -23,17 +24,18 @@ vec2 position = cogl_tex_coord_in[0].xy - 0.5;                             \n\
 float t = clamp(length(1.41421 * position), 0.0, 1.0);                     \n\
 float pixel_brightness = mix(1.0, 1.0 - vignette_sharpness, t);            \n\
 cogl_color_out.a *= 1.0 - pixel_brightness * brightness;                   \n\
-cogl_color_out.a += (rand(position) - 0.5) / 100.0;                        \n';
+float noise_magnitude = (2.0 / ((1.0 - cogl_color_out.a) * 255.0));        \n\
+cogl_color_out.a += (rand(position) - 0.5) * noise_magnitude;              \n';
 
 
 const RadialShaderEffect = GObject.registerClass({
     Properties: {
         'brightness': GObject.ParamSpec.float(
-            'brightness', 'brightness', 'brightness',
+            'brightness', null, null,
             GObject.ParamFlags.READWRITE,
             0, 1, 1),
         'sharpness': GObject.ParamSpec.float(
-            'sharpness', 'sharpness', 'sharpness',
+            'sharpness', null, null,
             GObject.ParamFlags.READWRITE,
             0, 1, 0),
     },
@@ -52,7 +54,7 @@ const RadialShaderEffect = GObject.registerClass({
     }
 
     vfunc_build_pipeline() {
-        this.add_glsl_snippet(Shell.SnippetHook.FRAGMENT,
+        this.add_glsl_snippet(Cogl.SnippetHook.FRAGMENT,
             VIGNETTE_DECLARATIONS, VIGNETTE_CODE, true);
     }
 
@@ -89,7 +91,7 @@ const RadialShaderEffect = GObject.registerClass({
 export const Lightbox = GObject.registerClass({
     Properties: {
         'active': GObject.ParamSpec.boolean(
-            'active', 'active', 'active', GObject.ParamFlags.READABLE, false),
+            'active', null, null, GObject.ParamFlags.READABLE, false),
     },
 }, class Lightbox extends St.Bin {
     /**

@@ -22,8 +22,7 @@
 #error "Only <st/st.h> can be included directly.h"
 #endif
 
-#ifndef __ST_SCROLL_BAR_H__
-#define __ST_SCROLL_BAR_H__
+#pragma once
 
 #include <st/st-adjustment.h>
 #include <st/st-widget.h>
@@ -48,6 +47,8 @@ void          st_scroll_bar_set_adjustment (StScrollBar  *bar,
                                             StAdjustment *adjustment);
 StAdjustment *st_scroll_bar_get_adjustment (StScrollBar  *bar);
 
-G_END_DECLS
+void               st_scroll_bar_set_orientation (StScrollBar        *bar,
+                                                  ClutterOrientation  orientation);
+ClutterOrientation st_scroll_bar_get_orientation (StScrollBar *bar);
 
-#endif /* __ST_SCROLL_BAR_H__ */
+G_END_DECLS

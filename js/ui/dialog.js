@@ -39,7 +39,7 @@ class Dialog extends St.Widget {
             style_class: 'modal-dialog',
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
         });
 
         // modal dialogs are fixed width and grow vertically; set the request
@@ -49,13 +49,14 @@ class Dialog extends St.Widget {
         this._dialog.set_offscreen_redirect(Clutter.OffscreenRedirect.ALWAYS);
 
         this.contentLayout = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             style_class: 'modal-dialog-content-box',
             y_expand: true,
         });
         this._dialog.add_child(this.contentLayout);
 
         this.buttonLayout = new St.Widget({
+            style_class: 'modal-dialog-button-box',
             layout_manager: new Clutter.BoxLayout({
                 spacing: 12,
                 homogeneous: true,
@@ -124,7 +125,7 @@ class Dialog extends St.Widget {
             keys = [];
 
         let button = new St.Button({
-            style_class: 'modal-dialog-linked-button',
+            style_class: 'modal-dialog-button',
             button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE,
             reactive: true,
             can_focus: true,
@@ -159,12 +160,12 @@ class Dialog extends St.Widget {
 export const MessageDialogContent = GObject.registerClass({
     Properties: {
         'title': GObject.ParamSpec.string(
-            'title', 'title', 'title',
+            'title', null, null,
             GObject.ParamFlags.READWRITE |
             GObject.ParamFlags.CONSTRUCT,
             null),
         'description': GObject.ParamSpec.string(
-            'description', 'description', 'description',
+            'description', null, null,
             GObject.ParamFlags.READWRITE |
             GObject.ParamFlags.CONSTRUCT,
             null),
@@ -174,13 +175,16 @@ export const MessageDialogContent = GObject.registerClass({
         this._title = new St.Label({style_class: 'message-dialog-title'});
         this._description = new St.Label({style_class: 'message-dialog-description'});
 
+        this._title.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+        this._title.clutter_text.line_wrap = true;
+
         this._description.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         this._description.clutter_text.line_wrap = true;
 
         super._init({
             style_class: 'message-dialog-content',
             x_expand: true,
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             ...params,
         });
 
@@ -251,7 +255,7 @@ export const MessageDialogContent = GObject.registerClass({
 export const ListSection = GObject.registerClass({
     Properties: {
         'title': GObject.ParamSpec.string(
-            'title', 'title', 'title',
+            'title', null, null,
             GObject.ParamFlags.READWRITE |
             GObject.ParamFlags.CONSTRUCT,
             null),
@@ -262,7 +266,7 @@ export const ListSection = GObject.registerClass({
 
         this.list = new St.BoxLayout({
             style_class: 'dialog-list-box',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
         });
 
         this._listScrollView = new St.ScrollView({
@@ -273,7 +277,7 @@ export const ListSection = GObject.registerClass({
         super._init({
             style_class: 'dialog-list',
             x_expand: true,
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             ...params,
         });
 
@@ -295,16 +299,16 @@ export const ListSection = GObject.registerClass({
 export const ListSectionItem = GObject.registerClass({
     Properties: {
         'icon-actor':  GObject.ParamSpec.object(
-            'icon-actor', 'icon-actor', 'Icon actor',
+            'icon-actor', null, null,
             GObject.ParamFlags.READWRITE,
             Clutter.Actor.$gtype),
         'title': GObject.ParamSpec.string(
-            'title', 'title', 'title',
+            'title', null, null,
             GObject.ParamFlags.READWRITE |
             GObject.ParamFlags.CONSTRUCT,
             null),
         'description': GObject.ParamSpec.string(
-            'description', 'description', 'description',
+            'description', null, null,
             GObject.ParamFlags.READWRITE |
             GObject.ParamFlags.CONSTRUCT,
             null),
@@ -314,7 +318,7 @@ export const ListSectionItem = GObject.registerClass({
         this._iconActorBin = new St.Bin();
 
         let textLayout = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             y_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
         });

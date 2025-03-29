@@ -23,7 +23,21 @@ export class ServiceImplementation {
         this._senders = new Map();
         this._holdCount = 0;
 
-        this._shellName = this._getUniqueShellName();
+        // Bail out when not running under gnome-shell
+        Gio.DBus.watch_name(Gio.BusType.SESSION,
+            'org.gnome.Shell',
+            Gio.BusNameWatcherFlags.NONE,
+            (c, name, owner) => (this._shellName = owner),
+            () => {
+                this._shellName = null;
+
+                // For auto-shutdown services, delay shutting
+                // down in case the shell reappears
+                if (this._autoShutdown)
+                    this._queueShutdownCheck();
+                else
+                    this.emit('shutdown');
+            });
 
         this._hasSignals = this._dbusImpl.get_info().signals.length > 0;
         this._shutdownTimeoutId = 0;
@@ -96,7 +110,7 @@ export class ServiceImplementation {
         if (GLib.getenv('SHELL_DBUS_PERSIST'))
             return;
 
-        if (this._holdCount > 0)
+        if (this._shellName && this._holdCount > 0)
             return;
 
         this.emit('shutdown');
@@ -156,26 +170,6 @@ export class ServiceImplementation {
             that._queueShutdownCheck();
         };
     }
-
-    _getUniqueShellName() {
-        try {
-            const res = Gio.DBus.session.call_sync(
-                'org.freedesktop.DBus',
-                '/org/freedesktop/DBus',
-                'org.freedesktop.DBus',
-                'GetNameOwner',
-                new GLib.Variant('(s)', ['org.gnome.Shell']),
-                null,
-                Gio.DBusCallFlags.NONE,
-                -1,
-                null);
-            const [name] = res.deepUnpack();
-            return name;
-        } catch (e) {
-            console.warn(`Failed to resolve shell name: ${e.message}`);
-            return '';
-        }
-    }
 }
 Signals.addSignalMethods(ServiceImplementation.prototype);
 
@@ -189,13 +183,6 @@ export class DBusService {
     }
 
     async runAsync() {
-        // Bail out when not running under gnome-shell
-        Gio.DBus.watch_name(Gio.BusType.SESSION,
-            'org.gnome.Shell',
-            Gio.BusNameWatcherFlags.NONE,
-            null,
-            () => this._loop.quit());
-
         this._service.register();
 
         let flags = Gio.BusNameOwnerFlags.ALLOW_REPLACEMENT;

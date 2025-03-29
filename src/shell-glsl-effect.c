@@ -1,8 +1,9 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*- */
 
 /**
- * SECTION:shell-glsl-effect
- * @short_description: An offscreen effect using GLSL
+ * ShellGLSLEffect:
+ *
+ * An offscreen effect using GLSL
  *
  * A #ShellGLSLEffect is a #ClutterOffscreenEffect that allows
  * running custom GLSL to the vertex and fragment stages of the
@@ -13,6 +14,8 @@
 
 #include <cogl/cogl.h>
 #include "shell-glsl-effect.h"
+
+#include "shell-global.h"
 
 typedef struct _ShellGLSLEffectPrivate ShellGLSLEffectPrivate;
 struct _ShellGLSLEffectPrivate
@@ -50,7 +53,7 @@ shell_glsl_effect_create_pipeline (ClutterOffscreenEffect *effect,
  */
 void
 shell_glsl_effect_add_glsl_snippet (ShellGLSLEffect  *effect,
-                                    ShellSnippetHook  hook,
+                                    CoglSnippetHook   hook,
                                     const char       *declarations,
                                     const char       *code,
                                     gboolean          is_replace)
@@ -62,16 +65,16 @@ shell_glsl_effect_add_glsl_snippet (ShellGLSLEffect  *effect,
 
   if (is_replace)
     {
-      snippet = cogl_snippet_new ((CoglSnippetHook)hook, declarations, NULL);
+      snippet = cogl_snippet_new (hook, declarations, NULL);
       cogl_snippet_set_replace (snippet, code);
     }
   else
     {
-      snippet = cogl_snippet_new ((CoglSnippetHook)hook, declarations, code);
+      snippet = cogl_snippet_new (hook, declarations, code);
     }
 
-  if (hook == SHELL_SNIPPET_HOOK_VERTEX ||
-      hook == SHELL_SNIPPET_HOOK_FRAGMENT)
+  if (hook == COGL_SNIPPET_HOOK_VERTEX ||
+      hook == COGL_SNIPPET_HOOK_FRAGMENT)
     cogl_pipeline_add_snippet (klass->base_pipeline, snippet);
   else
     cogl_pipeline_add_layer_snippet (klass->base_pipeline, 0, snippet);
@@ -103,8 +106,6 @@ shell_glsl_effect_constructed (GObject *object)
   ShellGLSLEffect *self;
   ShellGLSLEffectClass *klass;
   ShellGLSLEffectPrivate *priv;
-  CoglContext *ctx =
-    clutter_backend_get_cogl_context (clutter_get_default_backend ());
 
   G_OBJECT_CLASS (shell_glsl_effect_parent_class)->constructed (object);
 
@@ -118,6 +119,14 @@ shell_glsl_effect_constructed (GObject *object)
 
   if (G_UNLIKELY (klass->base_pipeline == NULL))
     {
+      ShellGlobal *global = shell_global_get ();
+      ClutterStage *stage = shell_global_get_stage (global);
+      ClutterContext *clutter_context =
+        clutter_actor_get_context (CLUTTER_ACTOR (stage));
+      ClutterBackend *backend =
+        clutter_context_get_backend (clutter_context);
+      CoglContext *ctx = clutter_backend_get_cogl_context (backend);
+
       klass->base_pipeline = cogl_pipeline_new (ctx);
       cogl_pipeline_set_blend (klass->base_pipeline, "RGB = ADD (SRC_COLOR * (SRC_COLOR[A]), DST_COLOR * (1-SRC_COLOR[A]))", NULL);
 

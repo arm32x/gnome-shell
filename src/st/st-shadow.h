@@ -18,8 +18,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __ST_SHADOW__
-#define __ST_SHADOW__
+#pragma once
 
 #include <clutter/clutter.h>
 
@@ -42,7 +41,11 @@ typedef struct _StShadowHelper StShadowHelper;
  * @spread: shadow's spread radius - grow the shadow without enlarging the
  *           blur.
  *
- * Attributes of the -st-shadow property.
+ * A type representing -st-shadow attributes
+ *
+ * #StShadow is a boxed type for storing attributes of the -st-shadow
+ * property, modelled liberally after the CSS3 box-shadow property.
+ * See http://www.css3.info/preview/box-shadow/
  */
 struct _StShadow {
     CoglColor color;
@@ -91,5 +94,3 @@ void            st_shadow_helper_paint (StShadowHelper   *helper,
                                         uint8_t           paint_opacity);
 
 G_END_DECLS
-
-#endif /* __ST_SHADOW__ */

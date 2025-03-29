@@ -19,16 +19,15 @@
  */
 
 /**
- * SECTION:st-adjustment
- * @short_description: A GObject representing an adjustable bounded value
+ * StAdjustment:
+ *
+ * An adjustable bounded value.
  *
  * The #StAdjustment object represents a range of values bounded between a
  * minimum and maximum, together with step and page increments and a page size.
  */
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
 
 #include <glib-object.h>
 #include <clutter/clutter.h>
@@ -98,32 +97,16 @@ typedef struct _TransitionClosure
   gulong completed_id;
 } TransitionClosure;
 
-static gboolean st_adjustment_set_lower          (StAdjustment *adjustment,
-                                                  gdouble       lower);
-static gboolean st_adjustment_set_upper          (StAdjustment *adjustment,
-                                                  gdouble       upper);
-static gboolean st_adjustment_set_step_increment (StAdjustment *adjustment,
-                                                  gdouble       step);
-static gboolean st_adjustment_set_page_increment (StAdjustment *adjustment,
-                                                  gdouble       page);
-static gboolean st_adjustment_set_page_size      (StAdjustment *adjustment,
-                                                  gdouble       size);
-
 static ClutterActor *
-st_adjustment_get_actor (ClutterAnimatable *animatable)
+animatable_get_actor (ClutterAnimatable *animatable)
 {
-  StAdjustment *adjustment = ST_ADJUSTMENT (animatable);
-  StAdjustmentPrivate *priv = st_adjustment_get_instance_private (adjustment);
-
-  g_warn_if_fail (priv->actor);
-
-  return priv->actor;
+  return st_adjustment_get_actor (ST_ADJUSTMENT (animatable));
 }
 
 static void
 animatable_iface_init (ClutterAnimatableInterface *iface)
 {
-  iface->get_actor = st_adjustment_get_actor;
+  iface->get_actor = animatable_get_actor;
 }
 
 static void
@@ -202,11 +185,39 @@ actor_destroyed (gpointer  user_data,
   g_object_notify_by_pspec (G_OBJECT (adj), props[PROP_ACTOR]);
 }
 
-static void
+/**
+ * st_adjustment_get_actor:
+ * @adjustment: a #StAdjustment
+ *
+ * Retrieves the actor used for transitions.
+ *
+ * Returns: (transfer none):
+ */
+ClutterActor *
+st_adjustment_get_actor (StAdjustment *adjustment)
+{
+  StAdjustmentPrivate *priv;
+
+  g_return_val_if_fail (ST_IS_ADJUSTMENT (adjustment), NULL);
+
+  priv = st_adjustment_get_instance_private (adjustment);
+  return priv->actor;
+}
+
+/**
+ * st_adjustment_set_actor:
+ * @adjustment: a #StAdjustment
+ * @actor: a #ClutterActor
+ *
+ * Sets the actor used for transitions.
+ */
+void
 st_adjustment_set_actor (StAdjustment *adj,
                          ClutterActor *actor)
 {
   StAdjustmentPrivate *priv;
+
+  g_return_if_fail (ST_IS_ADJUSTMENT (adj));
 
   priv = st_adjustment_get_instance_private (adj);
 
@@ -329,7 +340,7 @@ st_adjustment_class_init (StAdjustmentClass *klass)
    * monitor should drive the animation.
    */
   props[PROP_ACTOR] =
-    g_param_spec_object ("actor", "Actor", "Actor",
+    g_param_spec_object ("actor", NULL, NULL,
                          CLUTTER_TYPE_ACTOR,
                          ST_PARAM_READWRITE |
                          G_PARAM_EXPLICIT_NOTIFY);
@@ -340,7 +351,7 @@ st_adjustment_class_init (StAdjustmentClass *klass)
    * The minimum value of the adjustment.
    */
   props[PROP_LOWER] =
-    g_param_spec_double ("lower", "Lower", "Lower bound",
+    g_param_spec_double ("lower", NULL, NULL,
                          -G_MAXDOUBLE,  G_MAXDOUBLE, 0.0,
                          ST_PARAM_READWRITE |
                          G_PARAM_CONSTRUCT |
@@ -355,7 +366,7 @@ st_adjustment_class_init (StAdjustmentClass *klass)
    * #StAdjustment:page-size is non-zero.
    */
   props[PROP_UPPER] =
-    g_param_spec_double ("upper", "Upper", "Upper bound",
+    g_param_spec_double ("upper", NULL, NULL,
                          -G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
                          ST_PARAM_READWRITE |
                          G_PARAM_CONSTRUCT |
@@ -367,7 +378,7 @@ st_adjustment_class_init (StAdjustmentClass *klass)
    * The value of the adjustment.
    */
   props[PROP_VALUE] =
-    g_param_spec_double ("value", "Value", "Current value",
+    g_param_spec_double ("value", NULL, NULL,
                          -G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
                          ST_PARAM_READWRITE |
                          G_PARAM_CONSTRUCT |
@@ -379,7 +390,7 @@ st_adjustment_class_init (StAdjustmentClass *klass)
    * The step increment of the adjustment.
    */
   props[PROP_STEP_INC] =
-    g_param_spec_double ("step-increment", "Step Increment", "Step increment",
+    g_param_spec_double ("step-increment", NULL, NULL,
                          0.0, G_MAXDOUBLE, 0.0,
                          ST_PARAM_READWRITE |
                          G_PARAM_CONSTRUCT |
@@ -391,7 +402,7 @@ st_adjustment_class_init (StAdjustmentClass *klass)
    * The page increment of the adjustment.
    */
   props[PROP_PAGE_INC] =
-    g_param_spec_double ("page-increment", "Page Increment", "Page increment",
+    g_param_spec_double ("page-increment", NULL, NULL,
                          0.0, G_MAXDOUBLE, 0.0,
                          ST_PARAM_READWRITE |
                          G_PARAM_CONSTRUCT |
@@ -406,7 +417,7 @@ st_adjustment_class_init (StAdjustmentClass *klass)
    * adjustment is used for a simple scalar value.
    */
   props[PROP_PAGE_SIZE] =
-    g_param_spec_double ("page-size", "Page Size", "Page size",
+    g_param_spec_double ("page-size", NULL, NULL,
                          0.0, G_MAXDOUBLE, 0.0,
                          ST_PARAM_READWRITE |
                          G_PARAM_CONSTRUCT |
@@ -528,7 +539,7 @@ st_adjustment_set_value (StAdjustment *adjustment,
  * @upper: the upper value
  *
  * Set #StAdjustment:value to a value clamped between @lower and @upper. The
- * clamping described by st_adjustment_set_value() still applies.
+ * clamping described by [method@St.Adjustment.set_value] still applies.
  */
 void
 st_adjustment_clamp_page (StAdjustment *adjustment,
@@ -564,6 +575,25 @@ st_adjustment_clamp_page (StAdjustment *adjustment,
 }
 
 /**
+ * st_adjustment_get_lower:
+ * @adjustment: a #StAdjustment
+ *
+ * Retrieves the minimum value of the adjustment.
+ *
+ * Returns: the minimum value
+ */
+double
+st_adjustment_get_lower (StAdjustment *adjustment)
+{
+  StAdjustmentPrivate *priv;
+
+  g_return_val_if_fail (ST_IS_ADJUSTMENT (adjustment), -1);
+
+  priv = st_adjustment_get_instance_private (adjustment);
+  return priv->lower;
+}
+
+/**
  * st_adjustment_set_lower:
  * @adjustment: a #StAdjustment
  * @lower: the new minimum value
@@ -571,20 +601,24 @@ st_adjustment_clamp_page (StAdjustment *adjustment,
  * Sets the minimum value of the adjustment.
  *
  * When setting multiple adjustment properties via their individual
- * setters, multiple #GObject::notify and #StAdjustment::changed
+ * setters, multiple #GObject::notify and [signal@St.Adjustment::changed]
  * signals will be emitted. However, it’s possible to compress the
- * #GObject::notify and #StAdjustment::changed signals into one of each
+ * #GObject::notify and [signal@St.Adjustment::changed] signals into one of each
  * by calling g_object_freeze_notify() and g_object_thaw_notify() around the
  * calls to the individual setters.
  *
- * Alternatively, st_adjustment_set_values() can be used to compress
- * #GObject::notify and #StAdjustment::changed emissions.
+ * Alternatively, [method@St.Adjustment.set_values] can be used to compress
+ * #GObject::notify and [signal@St.Adjustment::changed] emissions.
  */
-static gboolean
+void
 st_adjustment_set_lower (StAdjustment *adjustment,
                          gdouble       lower)
 {
-  StAdjustmentPrivate *priv = st_adjustment_get_instance_private (adjustment);
+  StAdjustmentPrivate *priv;
+
+  g_return_if_fail (ST_IS_ADJUSTMENT (adjustment));
+
+  priv = st_adjustment_get_instance_private (adjustment);
 
   if (priv->lower != lower)
     {
@@ -595,11 +629,26 @@ st_adjustment_set_lower (StAdjustment *adjustment,
       /* Defer clamp until after construction. */
       if (!priv->is_constructing)
         st_adjustment_clamp_page (adjustment, priv->lower, priv->upper);
-
-      return TRUE;
     }
+}
 
-  return FALSE;
+/**
+ * st_adjustment_get_upper:
+ * @adjustment: a #StAdjustment
+ *
+ * Retrieves the maximum value of the adjustment.
+ *
+ * Returns: the maximum value
+ */
+double
+st_adjustment_get_upper (StAdjustment *adjustment)
+{
+  StAdjustmentPrivate *priv;
+
+  g_return_val_if_fail (ST_IS_ADJUSTMENT (adjustment), -1);
+
+  priv = st_adjustment_get_instance_private (adjustment);
+  return priv->upper;
 }
 
 /**
@@ -612,16 +661,18 @@ st_adjustment_set_lower (StAdjustment *adjustment,
  * Note that values will be restricted by `upper - page-size`
  * if the page-size property is nonzero.
  *
- * See st_adjustment_set_lower() about how to compress multiple
+ * See [method@St.Adjustment.set_lower] about how to compress multiple
  * signal emissions when setting multiple adjustment properties.
- *
- * Returns: %TRUE if the value was changed
  */
-static gboolean
+void
 st_adjustment_set_upper (StAdjustment *adjustment,
                          gdouble       upper)
 {
-  StAdjustmentPrivate *priv = st_adjustment_get_instance_private (adjustment);
+  StAdjustmentPrivate *priv;
+
+  g_return_if_fail (ST_IS_ADJUSTMENT (adjustment));
+
+  priv = st_adjustment_get_instance_private (adjustment);
 
   if (priv->upper != upper)
     {
@@ -632,11 +683,26 @@ st_adjustment_set_upper (StAdjustment *adjustment,
       /* Defer clamp until after construction. */
       if (!priv->is_constructing)
         st_adjustment_clamp_page (adjustment, priv->lower, priv->upper);
-
-      return TRUE;
     }
+}
 
-  return FALSE;
+/**
+ * st_adjustment_get_step_increment:
+ * @adjustment: a #StAdjustment
+ *
+ * Retrieves the step increment of the adjustment.
+ *
+ * Returns: the step increment
+ */
+double
+st_adjustment_get_step_increment (StAdjustment *adjustment)
+{
+  StAdjustmentPrivate *priv;
+
+  g_return_val_if_fail (ST_IS_ADJUSTMENT (adjustment), -1);
+
+  priv = st_adjustment_get_instance_private (adjustment);
+  return priv->step_increment;
 }
 
 /**
@@ -646,27 +712,44 @@ st_adjustment_set_upper (StAdjustment *adjustment,
  *
  * Sets the step increment of the adjustment.
  *
- * See st_adjustment_set_lower() about how to compress multiple
+ * See [method@St.Adjustment.set_lower] about how to compress multiple
  * signal emissions when setting multiple adjustment properties.
- *
- * Returns: %TRUE if the value was changed
  */
-static gboolean
+void
 st_adjustment_set_step_increment (StAdjustment *adjustment,
                                   gdouble       step)
 {
-  StAdjustmentPrivate *priv = st_adjustment_get_instance_private (adjustment);
+  StAdjustmentPrivate *priv;
+
+  g_return_if_fail (ST_IS_ADJUSTMENT (adjustment));
+
+  priv = st_adjustment_get_instance_private (adjustment);
 
   if (priv->step_increment != step)
     {
       priv->step_increment = step;
 
       g_object_notify_by_pspec (G_OBJECT (adjustment), props[PROP_STEP_INC]);
-
-      return TRUE;
     }
+}
 
-  return FALSE;
+/**
+ * st_adjustment_get_page_increment:
+ * @adjustment: a #StAdjustment
+ *
+ * Retrieves the page increment of the adjustment.
+ *
+ * Returns: the page increment
+ */
+double
+st_adjustment_get_page_increment (StAdjustment *adjustment)
+{
+  StAdjustmentPrivate *priv;
+
+  g_return_val_if_fail (ST_IS_ADJUSTMENT (adjustment), -1);
+
+  priv = st_adjustment_get_instance_private (adjustment);
+  return priv->page_increment;
 }
 
 /**
@@ -676,27 +759,44 @@ st_adjustment_set_step_increment (StAdjustment *adjustment,
  *
  * Sets the page increment of the adjustment.
  *
- * See st_adjustment_set_lower() about how to compress multiple
+ * See [method@St.Adjustment.set_lower] about how to compress multiple
  * signal emissions when setting multiple adjustment properties.
- *
- * Returns: %TRUE if the value was changed
  */
-static gboolean
+void
 st_adjustment_set_page_increment (StAdjustment *adjustment,
                                   gdouble       page)
 {
-  StAdjustmentPrivate *priv = st_adjustment_get_instance_private (adjustment);
+  StAdjustmentPrivate *priv;
+
+  g_return_if_fail (ST_IS_ADJUSTMENT (adjustment));
+
+  priv = st_adjustment_get_instance_private (adjustment);
 
   if (priv->page_increment != page)
     {
       priv->page_increment = page;
 
       g_object_notify_by_pspec (G_OBJECT (adjustment), props[PROP_PAGE_INC]);
-
-      return TRUE;
     }
+}
 
-  return FALSE;
+/**
+ * st_adjustment_get_page_size:
+ * @adjustment: a #StAdjustment
+ *
+ * Retrieves the page size of the adjustment.
+ *
+ * Returns: the page size
+ */
+double
+st_adjustment_get_page_size (StAdjustment *adjustment)
+{
+  StAdjustmentPrivate *priv;
+
+  g_return_val_if_fail (ST_IS_ADJUSTMENT (adjustment), -1);
+
+  priv = st_adjustment_get_instance_private (adjustment);
+  return priv->page_size;
 }
 
 /**
@@ -706,16 +806,18 @@ st_adjustment_set_page_increment (StAdjustment *adjustment,
  *
  * Sets the page size of the adjustment.
  *
- * See st_adjustment_set_lower() about how to compress multiple
+ * See [method@St.Adjustment.set_lower] about how to compress multiple
  * signal emissions when setting multiple adjustment properties.
- *
- * Returns: %TRUE if the value was changed
  */
-static gboolean
+void
 st_adjustment_set_page_size (StAdjustment *adjustment,
                              gdouble       size)
 {
-  StAdjustmentPrivate *priv = st_adjustment_get_instance_private (adjustment);
+  StAdjustmentPrivate *priv;
+
+  g_return_if_fail (ST_IS_ADJUSTMENT (adjustment));
+
+  priv = st_adjustment_get_instance_private (adjustment);
 
   if (priv->page_size != size)
     {
@@ -726,11 +828,7 @@ st_adjustment_set_page_size (StAdjustment *adjustment,
       /* We'll explicitly clamp after construction. */
       if (!priv->is_constructing)
         st_adjustment_clamp_page (adjustment, priv->lower, priv->upper);
-
-      return TRUE;
     }
-
-  return FALSE;
 }
 
 /**
@@ -746,9 +844,9 @@ st_adjustment_set_page_size (StAdjustment *adjustment,
  * Sets all properties of the adjustment at once.
  *
  * Use this function to avoid multiple emissions of the #GObject::notify and
- * #StAdjustment::changed signals. See st_adjustment_set_lower() for an
+ * [signal@St.Adjustment::changed] signals. See st_adjustment_set_lower() for an
  * alternative way of compressing multiple emissions of #GObject::notify and
- * #StAdjustmet::changed into one of each.
+ * [signal@St.Adjustment::changed] into one of each.
  */
 void
 st_adjustment_set_values (StAdjustment *adjustment,
@@ -829,7 +927,7 @@ st_adjustment_get_values (StAdjustment *adjustment,
  *   or similar.
  *
  * Adjusts the adjustment using delta values from a scroll event.
- * You should use this instead of using st_adjustment_set_value()
+ * You should use this instead of using [method@St.Adjustment.set_value]
  * as this method will tweak the values directly using the same
  * math as GTK+, to ensure that scrolling is consistent across
  * the environment.
@@ -912,7 +1010,7 @@ on_transition_stopped (ClutterTransition *transition,
  * @name: a transition name
  *
  * Get the #ClutterTransition for @name previously added with
- * st_adjustment_add_transition() or %NULL if not found.
+ * [method@St.Adjustment.add_transition] or %NULL if not found.
  *
  * Returns: (transfer none) (nullable): a #ClutterTransition
  */
@@ -944,7 +1042,7 @@ st_adjustment_get_transition (StAdjustment *adjustment,
  * @transition: a #ClutterTransition
  *
  * Add a #ClutterTransition for the adjustment. If the transition stops, it will
- * be automatically removed if #ClutterTransition:remove-on-complete is %TRUE.
+ * be automatically removed if [property@Clutter.Transition:remove-on-complete] is %TRUE.
  */
 void
 st_adjustment_add_transition (StAdjustment      *adjustment,
@@ -991,7 +1089,7 @@ st_adjustment_add_transition (StAdjustment      *adjustment,
  * @adjustment: a #StAdjustment
  * @name: the name of the transition to remove
  *
- * Remove a #ClutterTransition previously added by st_adjustment_add_transtion()
+ * Remove a #ClutterTransition previously added by [method@St.Adjustment.add_transition]
  * with @name.
  */
 void

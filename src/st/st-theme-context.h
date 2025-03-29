@@ -19,8 +19,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __ST_THEME_CONTEXT_H__
-#define __ST_THEME_CONTEXT_H__
+#pragma once
 
 #include <clutter/clutter.h>
 #include <pango/pango.h>
@@ -29,8 +28,9 @@
 G_BEGIN_DECLS
 
 /**
- * SECTION:st-theme-context
- * @short_description: holds global information about a tree of styled objects
+ * StThemeContext:
+ *
+ * Holds global information about a tree of styled objects
  *
  * #StThemeContext is responsible for managing information global to a tree of styled objects,
  * such as the set of stylesheets or the default font. In normal usage, a #StThemeContext
@@ -42,7 +42,6 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE (StThemeContext, st_theme_context,
                       ST, THEME_CONTEXT, GObject)
 
-StThemeContext *st_theme_context_new           (void);
 StThemeContext *st_theme_context_get_for_stage (ClutterStage *stage);
 
 void                        st_theme_context_set_theme        (StThemeContext             *context,
@@ -63,7 +62,9 @@ StThemeNode *               st_theme_context_intern_node      (StThemeContext   
                                                                StThemeNode                *node);
 
 int st_theme_context_get_scale_factor (StThemeContext *context);
+void st_theme_context_set_scale_factor (StThemeContext *context,
+                                        int             factor);
+
+double st_theme_context_get_resolution (StThemeContext *context);
 
 G_END_DECLS
-
-#endif /* __ST_THEME_CONTEXT_H__ */

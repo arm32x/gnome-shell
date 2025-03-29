@@ -42,35 +42,35 @@ export function getDefault() {
 const SystemActions = GObject.registerClass({
     Properties: {
         'can-power-off': GObject.ParamSpec.boolean(
-            'can-power-off', 'can-power-off', 'can-power-off',
+            'can-power-off', null, null,
             GObject.ParamFlags.READABLE,
             false),
         'can-restart': GObject.ParamSpec.boolean(
-            'can-restart', 'can-restart', 'can-restart',
+            'can-restart', null, null,
             GObject.ParamFlags.READABLE,
             false),
         'can-suspend': GObject.ParamSpec.boolean(
-            'can-suspend', 'can-suspend', 'can-suspend',
+            'can-suspend', null, null,
             GObject.ParamFlags.READABLE,
             false),
         'can-lock-screen': GObject.ParamSpec.boolean(
-            'can-lock-screen', 'can-lock-screen', 'can-lock-screen',
+            'can-lock-screen', null, null,
             GObject.ParamFlags.READABLE,
             false),
         'can-switch-user': GObject.ParamSpec.boolean(
-            'can-switch-user', 'can-switch-user', 'can-switch-user',
+            'can-switch-user', null, null,
             GObject.ParamFlags.READABLE,
             false),
         'can-logout': GObject.ParamSpec.boolean(
-            'can-logout', 'can-logout', 'can-logout',
+            'can-logout', null, null,
             GObject.ParamFlags.READABLE,
             false),
         'can-lock-orientation': GObject.ParamSpec.boolean(
-            'can-lock-orientation', 'can-lock-orientation', 'can-lock-orientation',
+            'can-lock-orientation', null, null,
             GObject.ParamFlags.READABLE,
             false),
         'orientation-lock-icon': GObject.ParamSpec.string(
-            'orientation-lock-icon', 'orientation-lock-icon', 'orientation-lock-icon',
+            'orientation-lock-icon', null, null,
             GObject.ParamFlags.READWRITE,
             null),
     },
@@ -430,7 +430,7 @@ const SystemActions = GObject.registerClass({
         if (Main.screenShield)
             Main.screenShield.lock(false);
 
-        Clutter.threads_add_repaint_func_full(Clutter.RepaintFlags.POST_PAINT, () => {
+        Clutter.threads_add_repaint_func(Clutter.RepaintFlags.POST_PAINT, () => {
             Gdm.goto_login_session_sync(null);
             return false;
         });

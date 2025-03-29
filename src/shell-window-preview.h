@@ -1,5 +1,4 @@
-#ifndef __SHELL_WINDOW_PREVIEW_H__
-#define __SHELL_WINDOW_PREVIEW_H__
+#pragma once
 
 #include <st/st.h>
 
@@ -9,6 +8,6 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE (ShellWindowPreview, shell_window_preview,
                       SHELL, WINDOW_PREVIEW, StWidget)
 
-G_END_DECLS
+ClutterActor * shell_window_preview_get_window_container (ShellWindowPreview *preview);
 
-#endif /* __SHELL_WINDOW_PREVIEW_H__ */
+G_END_DECLS

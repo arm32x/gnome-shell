@@ -26,7 +26,7 @@ function getTermsForSearchString(searchString) {
 export const SearchController = GObject.registerClass({
     Properties: {
         'search-active': GObject.ParamSpec.boolean(
-            'search-active', 'search-active', 'search-active',
+            'search-active', null, null,
             GObject.ParamFlags.READABLE,
             false),
     },
@@ -186,9 +186,10 @@ export const SearchController = GObject.registerClass({
     }
 
     _onStageKeyFocusChanged() {
-        let focus = global.stage.get_key_focus();
-        let appearFocused = this._entry.contains(focus) ||
-                             this._searchResults.contains(focus);
+        const focus = global.stage.get_key_focus();
+        const appearFocused = focus != null &&
+            (this._entry.contains(focus) ||
+             this._searchResults.contains(focus));
 
         this._text.set_cursor_visible(appearFocused);
 

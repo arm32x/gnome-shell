@@ -21,8 +21,9 @@
  */
 
 /**
- * SECTION:st-scroll-view
- * @short_description: a container for scrollable children
+ * StScrollView:
+ *
+ * Container for scrollable children
  *
  * #StScrollView is a single child container for actors that implement
  * #StScrollable. It provides scrollbars around the edge of the child to
@@ -97,8 +98,6 @@ enum {
   PROP_0,
 
   PROP_CHILD,
-  PROP_HSCROLL,
-  PROP_VSCROLL,
   PROP_HADJUSTMENT,
   PROP_VADJUSTMENT,
   PROP_HSCROLLBAR_POLICY,
@@ -126,12 +125,6 @@ st_scroll_view_get_property (GObject    *object,
     {
     case PROP_CHILD:
       g_value_set_object (value, priv->child);
-      break;
-    case PROP_HSCROLL:
-      g_value_set_object (value, priv->hscroll);
-      break;
-    case PROP_VSCROLL:
-      g_value_set_object (value, priv->vscroll);
       break;
     case PROP_HADJUSTMENT:
       g_value_set_object (value, priv->hadjustment);
@@ -869,38 +862,12 @@ st_scroll_view_class_init (StScrollViewClass *klass)
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
   /**
-   * StScrollView:hscroll:
-   *
-   * The horizontal #StScrollBar for the #StScrollView.
-   */
-  props[PROP_HSCROLL] =
-    g_param_spec_object ("hscroll",
-                         "StScrollBar",
-                         "Horizontal scroll indicator",
-                         ST_TYPE_SCROLL_BAR,
-                         ST_PARAM_READABLE | G_PARAM_DEPRECATED);
-
-  /**
-   * StScrollView:vscroll:
-   *
-   * The vertical #StScrollBar for the #StScrollView.
-   */
-  props[PROP_VSCROLL] =
-    g_param_spec_object ("vscroll",
-                         "StScrollBar",
-                         "Vertical scroll indicator",
-                         ST_TYPE_SCROLL_BAR,
-                         ST_PARAM_READABLE | G_PARAM_DEPRECATED);
-
-  /**
    * StScrollView:hadjustment:
    *
    * The horizontal #StAdjustment for the #StScrollView.
    */
   props[PROP_HADJUSTMENT] =
-    g_param_spec_object ("hadjustment",
-                         "StAdjustment",
-                         "Horizontal scroll adjustment",
+    g_param_spec_object ("hadjustment", NULL, NULL,
                          ST_TYPE_ADJUSTMENT,
                          ST_PARAM_READABLE);
 
@@ -910,9 +877,7 @@ st_scroll_view_class_init (StScrollViewClass *klass)
    * The vertical #StAdjustment for the #StScrollView.
    */
   props[PROP_VADJUSTMENT] =
-    g_param_spec_object ("vadjustment",
-                         "StAdjustment",
-                         "Vertical scroll adjustment",
+    g_param_spec_object ("vadjustment", NULL, NULL,
                          ST_TYPE_ADJUSTMENT,
                          ST_PARAM_READABLE);
 
@@ -922,9 +887,7 @@ st_scroll_view_class_init (StScrollViewClass *klass)
    * The #StPolicyType for when to show the vertical #StScrollBar.
    */
   props[PROP_VSCROLLBAR_POLICY] =
-    g_param_spec_enum ("vscrollbar-policy",
-                       "Vertical Scrollbar Policy",
-                       "When the vertical scrollbar is displayed",
+    g_param_spec_enum ("vscrollbar-policy", NULL, NULL,
                        ST_TYPE_POLICY_TYPE,
                        ST_POLICY_AUTOMATIC,
                        ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
@@ -935,9 +898,7 @@ st_scroll_view_class_init (StScrollViewClass *klass)
    * The #StPolicyType for when to show the horizontal #StScrollBar.
    */
   props[PROP_HSCROLLBAR_POLICY] =
-    g_param_spec_enum ("hscrollbar-policy",
-                       "Horizontal Scrollbar Policy",
-                       "When the horizontal scrollbar is displayed",
+    g_param_spec_enum ("hscrollbar-policy", NULL, NULL,
                        ST_TYPE_POLICY_TYPE,
                        ST_POLICY_NEVER,
                        ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
@@ -948,9 +909,7 @@ st_scroll_view_class_init (StScrollViewClass *klass)
    * Whether the horizontal #StScrollBar is visible.
    */
   props[PROP_HSCROLLBAR_VISIBLE] =
-    g_param_spec_boolean ("hscrollbar-visible",
-                          "Horizontal Scrollbar Visibility",
-                          "Whether the horizontal scrollbar is visible",
+    g_param_spec_boolean ("hscrollbar-visible", NULL, NULL,
                           TRUE,
                           ST_PARAM_READABLE);
 
@@ -960,21 +919,17 @@ st_scroll_view_class_init (StScrollViewClass *klass)
    * Whether the vertical #StScrollBar is visible.
    */
   props[PROP_VSCROLLBAR_VISIBLE] =
-    g_param_spec_boolean ("vscrollbar-visible",
-                          "Vertical Scrollbar Visibility",
-                          "Whether the vertical scrollbar is visible",
+    g_param_spec_boolean ("vscrollbar-visible", NULL, NULL,
                           TRUE,
                           ST_PARAM_READABLE);
 
   /**
-   * StScrollView:enable-mouse-scrolling:
+   * StScrollView:enable-mouse-scrolling: (getter get_mouse_scrolling) (setter set_mouse_scrolling):
    *
    * Whether to enable automatic mouse wheel scrolling.
    */
   props[PROP_MOUSE_SCROLL] =
-    g_param_spec_boolean ("enable-mouse-scrolling",
-                          "Enable Mouse Scrolling",
-                          "Enable automatic mouse wheel scrolling",
+    g_param_spec_boolean ("enable-mouse-scrolling", NULL, NULL,
                           TRUE,
                           ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -984,9 +939,7 @@ st_scroll_view_class_init (StScrollViewClass *klass)
    * Whether scrollbars are painted on top of the content.
    */
   props[PROP_OVERLAY_SCROLLBARS] =
-    g_param_spec_boolean ("overlay-scrollbars",
-                          "Use Overlay Scrollbars",
-                          "Overlay scrollbars over the content",
+    g_param_spec_boolean ("overlay-scrollbars", NULL, NULL,
                           FALSE,
                           ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -1064,7 +1017,7 @@ st_scroll_view_init (StScrollView *self)
                                     NULL);
   scrollbar = g_object_new (ST_TYPE_SCROLL_BAR,
                             "adjustment", priv->hadjustment,
-                            "vertical", FALSE,
+                            "orientation", CLUTTER_ORIENTATION_HORIZONTAL,
                             NULL);
   g_set_weak_pointer (&priv->hscroll, scrollbar);
 
@@ -1073,7 +1026,7 @@ st_scroll_view_init (StScrollView *self)
                                     NULL);
   scrollbar = g_object_new (ST_TYPE_SCROLL_BAR,
                             "adjustment", priv->vadjustment,
-                            "vertical", TRUE,
+                            "orientation", CLUTTER_ORIENTATION_VERTICAL,
                             NULL);
   g_set_weak_pointer (&priv->vscroll, scrollbar);
 
@@ -1155,46 +1108,6 @@ st_scroll_view_set_child (StScrollView *scroll,
                              CLUTTER_ACTOR (child));
 
   g_object_thaw_notify (G_OBJECT (scroll));
-}
-
-/**
- * st_scroll_view_get_hscroll_bar:
- * @scroll: a #StScrollView
- *
- * Gets the horizontal #StScrollBar of the #StScrollView.
- *
- * Returns: (transfer none): the horizontal scrollbar
- */
-ClutterActor *
-st_scroll_view_get_hscroll_bar (StScrollView *scroll)
-{
-  StScrollViewPrivate *priv;
-
-  g_return_val_if_fail (ST_IS_SCROLL_VIEW (scroll), NULL);
-
-  priv = st_scroll_view_get_instance_private (scroll);
-
-  return priv->hscroll;
-}
-
-/**
- * st_scroll_view_get_vscroll_bar:
- * @scroll: a #StScrollView
- *
- * Gets the vertical scrollbar of the #StScrollView.
- *
- * Returns: (transfer none): the vertical #StScrollBar
- */
-ClutterActor *
-st_scroll_view_get_vscroll_bar (StScrollView *scroll)
-{
-  StScrollViewPrivate *priv;
-
-  g_return_val_if_fail (ST_IS_SCROLL_VIEW (scroll), NULL);
-
-  priv = st_scroll_view_get_instance_private (scroll);
-
-  return priv->vscroll;
 }
 
 /**
@@ -1513,4 +1426,26 @@ st_scroll_view_get_bar_offsets (StScrollView *scroll,
       *voffset = priv->hscrollbar_visible ? clutter_actor_get_height (priv->hscroll)
                                           : 0.;
     }
+}
+
+gboolean
+st_scroll_view_get_hscrollbar_visible (StScrollView *scroll)
+{
+  StScrollViewPrivate *priv;
+
+  g_return_val_if_fail (ST_IS_SCROLL_VIEW (scroll), FALSE);
+
+  priv = st_scroll_view_get_instance_private (scroll);
+  return priv->hscrollbar_visible;
+}
+
+gboolean
+st_scroll_view_get_vscrollbar_visible (StScrollView *scroll)
+{
+  StScrollViewPrivate *priv;
+
+  g_return_val_if_fail (ST_IS_SCROLL_VIEW (scroll), FALSE);
+
+  priv = st_scroll_view_get_instance_private (scroll);
+  return priv->vscrollbar_visible;
 }

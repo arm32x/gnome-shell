@@ -121,7 +121,9 @@ class InputSourceSwitcher extends SwitcherPopup.SwitcherList {
     }
 
     _addIcon(item) {
-        let box = new St.BoxLayout({vertical: true});
+        const box = new St.BoxLayout({
+            orientation: Clutter.Orientation.VERTICAL,
+        });
 
         const symbol = new St.Bin({
             style_class: 'input-source-switcher-symbol',
@@ -426,7 +428,7 @@ export class InputSourceManager extends Signals.EventEmitter {
         return true;
     }
 
-    _switchInputSource(display, window, binding) {
+    _switchInputSource(display, window, event, binding) {
         if (this._mruSources.length < 2)
             return;
 
@@ -495,7 +497,7 @@ export class InputSourceManager extends Signals.EventEmitter {
         this._changePerWindowSource();
     }
 
-    async activateInputSource(is, interactive) {
+    activateInputSource(is, interactive) {
         // The focus changes during holdKeyboard/releaseKeyboard may trick
         // the client into hiding UI containing the currently focused entry.
         // So holdKeyboard/releaseKeyboard are not called when
@@ -503,7 +505,8 @@ export class InputSourceManager extends Signals.EventEmitter {
         // E.g. Focusing on a password entry in a popup in Xorg Firefox
         // will emit 'set-content-type' signal.
         // https://gitlab.gnome.org/GNOME/gnome-shell/issues/391
-        if (!this._reloading)
+        const holdKeyboard = !this._reloading;
+        if (holdKeyboard)
             KeyboardManager.holdKeyboard();
         this._keyboardManager.apply(is.xkbId);
 
@@ -519,9 +522,10 @@ export class InputSourceManager extends Signals.EventEmitter {
         else
             engine = 'xkb:us::eng';
 
-        await this._ibusManager.setEngine(engine);
-        if (!this._reloading)
-            KeyboardManager.releaseKeyboard();
+        this._ibusManager.setEngine(engine).then(() => {
+            if (holdKeyboard)
+                KeyboardManager.releaseKeyboard();
+        });
 
         this._currentInputSourceChanged(is);
 
@@ -1100,35 +1104,6 @@ class InputSourceIndicator extends PanelMenu.Button {
     _showLayout() {
         Main.overview.hide();
 
-        let source = this._inputSourceManager.currentSource;
-        let xkbLayout = '';
-        let xkbVariant = '';
-
-        if (source.type === INPUT_SOURCE_TYPE_XKB) {
-            [, , , xkbLayout, xkbVariant] = KeyboardManager.getXkbInfo().get_layout_info(source.id);
-        } else if (source.type === INPUT_SOURCE_TYPE_IBUS) {
-            let engineDesc = IBusManager.getIBusManager().getEngineDesc(source.id);
-            if (engineDesc) {
-                xkbLayout = engineDesc.get_layout();
-                xkbVariant = engineDesc.get_layout_variant();
-            }
-
-            // The `default` layout from ibus engine means to
-            // use the current keyboard layout.
-            if (xkbLayout === 'default') {
-                const current = this._inputSourceManager.keyboardManager.currentLayout;
-                xkbLayout = current.layout;
-                xkbVariant = current.variant;
-            }
-        }
-
-        if (!xkbLayout || xkbLayout.length === 0)
-            return;
-
-        let description = xkbLayout;
-        if (xkbVariant.length > 0)
-            description = `${description}+${xkbVariant}`;
-
-        Util.spawn(['tecla', description]);
+        Util.spawn(['tecla']);
     }
 });

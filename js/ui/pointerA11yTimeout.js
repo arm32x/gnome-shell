@@ -10,7 +10,7 @@ const SUCCESS_ZOOM_OUT_DURATION = 150;
 const PieTimer = GObject.registerClass({
     Properties: {
         'angle': GObject.ParamSpec.double(
-            'angle', 'angle', 'angle',
+            'angle', null, null,
             GObject.ParamFlags.READWRITE,
             0, 2 * Math.PI, 0),
     },
@@ -110,7 +110,7 @@ const PieTimer = GObject.registerClass({
 
 export class PointerA11yTimeout {
     constructor() {
-        let seat = Clutter.get_default_backend().get_default_seat();
+        const seat = global.stage.context.get_backend().get_default_seat();
 
         seat.connect('ptr-a11y-timeout-started', (o, device, type, timeout) => {
             let [x, y] = global.get_pointer();

@@ -57,8 +57,9 @@ typedef struct {
 } ShellAppRunningState;
 
 /**
- * SECTION:shell-app
- * @short_description: Object representing an application
+ * ShellApp:
+ *
+ * Object representing an application
  *
  * This object wraps a #GDesktopAppInfo, providing methods and signals
  * primarily useful for running applications.
@@ -136,8 +137,7 @@ shell_app_get_property (GObject    *gobject,
       g_value_set_object (value, shell_app_get_icon (app));
       break;
     case PROP_ACTION_GROUP:
-      if (app->running_state)
-        g_value_set_object (value, app->running_state->muxer);
+      g_value_set_object (value, shell_app_get_action_group (app));
       break;
     case PROP_APP_INFO:
       if (app->info)
@@ -208,6 +208,21 @@ shell_app_get_icon (ShellApp *app)
     app->fallback_icon = g_themed_icon_new ("application-x-executable");
 
   return app->fallback_icon;
+}
+
+/**
+ * shell_app_get_action_group:
+ *
+ * Return value: (transfer none) (nullable):
+ */
+GActionGroup *
+shell_app_get_action_group (ShellApp *app)
+{
+  g_return_val_if_fail (SHELL_IS_APP (app), NULL);
+
+  if (app->running_state)
+    return G_ACTION_GROUP (app->running_state->muxer);
+  return NULL;
 }
 
 /**
@@ -1770,9 +1785,7 @@ shell_app_class_init(ShellAppClass *klass)
    * running or not, or transitioning between those states.
    */
   props[PROP_STATE] =
-    g_param_spec_enum ("state",
-                       "State",
-                       "Application state",
+    g_param_spec_enum ("state", NULL, NULL,
                        SHELL_TYPE_APP_STATE,
                        SHELL_APP_STATE_STOPPED,
                        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
@@ -1783,9 +1796,7 @@ shell_app_class_init(ShellAppClass *klass)
    * Whether the application has marked itself as busy.
    */
   props[PROP_BUSY] =
-    g_param_spec_boolean ("busy",
-                          "Busy",
-                          "Busy state",
+    g_param_spec_boolean ("busy", NULL, NULL,
                           FALSE,
                           G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
@@ -1796,9 +1807,7 @@ shell_app_class_init(ShellAppClass *klass)
    * like window:0xabcd1234)
    */
   props[PROP_ID] =
-    g_param_spec_string ("id",
-                         "Application id",
-                         "The desktop file id of this ShellApp",
+    g_param_spec_string ("id", NULL, NULL,
                          NULL,
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
@@ -1808,9 +1817,7 @@ shell_app_class_init(ShellAppClass *klass)
    * The #GIcon representing this ShellApp
    */
   props[PROP_ICON] =
-    g_param_spec_object ("icon",
-                         "GIcon",
-                         "The GIcon representing this app",
+    g_param_spec_object ("icon", NULL, NULL,
                          G_TYPE_ICON,
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
@@ -1821,9 +1828,7 @@ shell_app_class_init(ShellAppClass *klass)
    * documentation of #GApplication and #GActionGroup for details.
    */
   props[PROP_ACTION_GROUP] =
-    g_param_spec_object ("action-group",
-                         "Application Action Group",
-                         "The action group exported by the remote application",
+    g_param_spec_object ("action-group", NULL, NULL,
                          G_TYPE_ACTION_GROUP,
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
@@ -1833,9 +1838,7 @@ shell_app_class_init(ShellAppClass *klass)
    * The #GDesktopAppInfo associated with this ShellApp, if any.
    */
   props[PROP_APP_INFO] =
-    g_param_spec_object ("app-info",
-                         "DesktopAppInfo",
-                         "The DesktopAppInfo associated with this app",
+    g_param_spec_object ("app-info", NULL, NULL,
                          G_TYPE_DESKTOP_APP_INFO,
                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS);
 

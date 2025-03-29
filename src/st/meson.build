@@ -22,6 +22,7 @@ st_headers = [
   'st-scroll-view-fade.h',
   'st-settings.h',
   'st-shadow.h',
+  'st-spinner-content.h',
   'st-texture-cache.h',
   'st-theme.h',
   'st-theme-context.h',
@@ -136,6 +137,7 @@ st_sources = [
   'st-scroll-view-fade.c',
   'st-settings.c',
   'st-shadow.c',
+  'st-spinner-content.c',
   'st-texture-cache.c',
   'st-theme.c',
   'st-theme-context.c',
@@ -156,7 +158,7 @@ st_enums = gnome.mkenums_simple('st-enum-types',
 
 st_gir_sources = st_sources + st_headers + st_enums
 
-data_to_c = find_program(meson.project_source_root() + '/src/data-to-c.pl')
+data_to_c = find_program(meson.project_source_root() + '/src/data-to-c.py')
 
 glsl_sources = custom_target('scroll-view-fade-glsl',
   input: ['st-scroll-view-fade.glsl'],
@@ -179,19 +181,34 @@ st_cflags = [
   '-DPACKAGE_DATA_DIR="@0@"'.format(pkgdatadir)
 ]
 
+st_deps = [
+  mtk_dep,
+  clutter_dep,
+  mutter_dep,
+  gdk_pixbuf_dep,
+  pango_dep,
+]
+
 # Currently meson requires a shared library for building girs
 libst = shared_library('st-' + mutter_api_version,
   sources: st_gir_sources + st_nogir_sources + croco_sources,
   c_args: st_cflags,
-  dependencies: [mtk_dep, clutter_dep, mutter_dep, libxml_dep, gdk_pixbuf_dep, m_dep, schemas_dep],
+  dependencies: st_deps + [
+    libxml_dep,
+    m_dep,
+    schemas_dep,
+  ],
   build_rpath: mutter_typelibdir,
   install_rpath: mutter_typelibdir,
   install_dir: pkglibdir,
   install: true
 )
 
-libst_dep = declare_dependency(link_with: libst,
-  sources: st_enums[1]
+libst_dep = declare_dependency(
+  link_with: libst,
+  sources: st_enums[1],
+  dependencies: st_deps,
+  include_directories: [st_inc],
 )
 
 if get_option('tests') and have_x11_client
@@ -199,7 +216,7 @@ if get_option('tests') and have_x11_client
   test_theme = executable('test-theme',
     sources: 'test-theme.c',
     c_args: st_cflags,
-    dependencies: [mutter_test_dep, mtk_dep, libxml_dep],
+    dependencies: [mutter_test_dep, mtk_dep, libxml_dep, pango_dep],
     build_rpath: mutter_typelibdir,
     link_with: libst
   )

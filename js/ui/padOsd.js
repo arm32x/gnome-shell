@@ -17,7 +17,7 @@ import * as Layout from './layout.js';
 
 import {loadInterfaceXML} from '../misc/fileUtils.js';
 
-const ACTIVE_COLOR = '#729fcf';
+const ACTIVE_COLOR = 'st-lighten(-st-accent-color, 15%)';
 
 const LTR = 0;
 const RTL = 1;
@@ -291,15 +291,15 @@ const ActionEditor = GObject.registerClass({
 const PadDiagram = GObject.registerClass({
     Properties: {
         'left-handed': GObject.ParamSpec.boolean(
-            'left-handed', 'left-handed', 'Left handed',
+            'left-handed', null, null,
             GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT_ONLY,
             false),
         'image': GObject.ParamSpec.string(
-            'image', 'image', 'Image',
+            'image',  null, null,
             GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT_ONLY,
             null),
         'editor-actor': GObject.ParamSpec.object(
-            'editor-actor', 'editor-actor', 'Editor actor',
+            'editor-actor', null, null,
             GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT_ONLY,
             Clutter.Actor.$gtype),
     },
@@ -627,7 +627,7 @@ export const PadOsd = GObject.registerClass({
     _init(padDevice, settings, imagePath, editionMode, monitorIndex) {
         super._init({
             style_class: 'pad-osd-window',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
             y_expand: true,
             reactive: true,
@@ -640,7 +640,8 @@ export const PadOsd = GObject.registerClass({
         this._editionMode = editionMode;
         this._padChooser = null;
 
-        let seat = Clutter.get_default_backend().get_default_seat();
+        const backend = this.get_context().get_backend();
+        const seat = backend.get_default_seat();
         seat.connectObject(
             'device-added', (_seat, device) => {
                 if (device.get_device_type() === Clutter.InputDeviceType.PAD_DEVICE &&
@@ -677,7 +678,7 @@ export const PadOsd = GObject.registerClass({
 
         this._titleBox = new St.BoxLayout({
             style_class: 'pad-osd-title-box',
-            vertical: false,
+            orientation: Clutter.Orientation.HORIZONTAL,
             x_expand: false,
             x_align: Clutter.ActorAlign.CENTER,
         });
@@ -685,7 +686,7 @@ export const PadOsd = GObject.registerClass({
 
         const labelBox = new St.BoxLayout({
             style_class: 'pad-osd-title-menu-box',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
         });
         this._titleBox.add_child(labelBox);
 
@@ -949,7 +950,7 @@ export class PadOsdService extends Signals.EventEmitter {
 
     ShowAsync(params, invocation) {
         let [deviceNode, editionMode] = params;
-        let seat = Clutter.get_default_backend().get_default_seat();
+        const seat = global.stage.context.get_backend().get_default_seat();
         let devices = seat.list_devices();
         let padDevice = null;
 

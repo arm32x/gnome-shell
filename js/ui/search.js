@@ -75,7 +75,7 @@ class ListSearchResult extends SearchResult {
 
         let content = new St.BoxLayout({
             style_class: 'list-search-result-content',
-            vertical: false,
+            orientation: Clutter.Orientation.HORIZONTAL,
             x_align: Clutter.ActorAlign.START,
             x_expand: true,
             y_expand: true,
@@ -151,13 +151,16 @@ const SearchResultsBase = GObject.registerClass({
     GTypeFlags: GObject.TypeFlags.ABSTRACT,
     Properties: {
         'focus-child': GObject.ParamSpec.object(
-            'focus-child', 'focus-child', 'focus-child',
+            'focus-child', null, null,
             GObject.ParamFlags.READABLE,
             Clutter.Actor.$gtype),
     },
 }, class SearchResultsBase extends St.BoxLayout {
     _init(provider, resultsView) {
-        super._init({style_class: 'search-section', vertical: true});
+        super._init({
+            style_class: 'search-section',
+            orientation: Clutter.Orientation.VERTICAL,
+        });
 
         this.provider = provider;
         this._resultsView = resultsView;
@@ -300,7 +303,7 @@ class ListSearchResults extends SearchResultsBase {
 
         this._content = new St.BoxLayout({
             style_class: 'list-search-results',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
         });
         this._container.add_child(this._content);
@@ -339,7 +342,7 @@ class ListSearchResults extends SearchResultsBase {
 
 const GridSearchResultsLayout = GObject.registerClass({
     Properties: {
-        'spacing': GObject.ParamSpec.int('spacing', 'Spacing', 'Spacing',
+        'spacing': GObject.ParamSpec.int('spacing', null, null,
             GObject.ParamFlags.READWRITE, 0, GLib.MAXINT32, 0),
     },
 }, class GridSearchResultsLayout extends Clutter.LayoutManager {
@@ -555,7 +558,7 @@ export const SearchResultsView = GObject.registerClass({
     _init() {
         super._init({
             name: 'searchResults',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
             y_expand: true,
         });
@@ -565,7 +568,7 @@ export const SearchResultsView = GObject.registerClass({
 
         this._content = new MaxWidthBox({
             name: 'searchResultsContent',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
         });
 
@@ -916,7 +919,7 @@ class ProviderInfo extends St.Button {
         });
 
         this._content = new St.BoxLayout({
-            vertical: false,
+            orientation: Clutter.Orientation.HORIZONTAL,
             style_class: 'list-search-provider-content',
         });
         this.set_child(this._content);
@@ -928,7 +931,7 @@ class ProviderInfo extends St.Button {
 
         const detailsBox = new St.BoxLayout({
             style_class: 'list-search-provider-details',
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
         });
 

@@ -21,8 +21,7 @@
 #error "Only <st/st.h> can be included directly.h"
 #endif
 
-#ifndef __ST_LABEL_H__
-#define __ST_LABEL_H__
+#pragma once
 
 G_BEGIN_DECLS
 
@@ -33,12 +32,6 @@ G_DECLARE_FINAL_TYPE (StLabel, st_label, ST, LABEL, StWidget)
 
 typedef struct _StLabelPrivate       StLabelPrivate;
 
-/**
- * StLabel:
- *
- * The contents of this structure is private and should only be accessed using
- * the provided API.
- */
 struct _StLabel
 {
   /*< private >*/
@@ -51,8 +44,7 @@ StWidget *     st_label_new              (const gchar *text);
 const gchar *  st_label_get_text         (StLabel     *label);
 void           st_label_set_text         (StLabel     *label,
                                           const gchar *text);
-ClutterActor * st_label_get_clutter_text (StLabel     *label);
+ClutterText *  st_label_get_clutter_text (StLabel     *label);
 
 G_END_DECLS
 
-#endif /* __ST_LABEL_H__ */

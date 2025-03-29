@@ -1,7 +1,7 @@
 project('gnome-shell', 'c',
-  version: '47.0',
-  meson_version: '>= 0.58.0',
-  license: 'GPLv2+'
+  version: '48.0',
+  meson_version: '>= 1.1.0',
+  license: 'GPL-2.0-or-later',
 )
 
 split_version = meson.project_version().split('.')
@@ -10,11 +10,10 @@ split_version = meson.project_version().split('.')
 # the Cogl and Clutter libraries also use this API version.
 # The API version is increased each development cycle,
 # starting with 0 in 3.23.x
-mutter_api_version = '15'
+mutter_api_version = '16'
 
 clutter_pc = 'mutter-clutter-' + mutter_api_version
 cogl_pc = 'mutter-cogl-' + mutter_api_version
-cogl_pango_pc = 'mutter-cogl-pango-' + mutter_api_version
 mtk_pc = 'mutter-mtk-' + mutter_api_version
 libmutter_pc = 'libmutter-' + mutter_api_version
 libmutter_test_pc = 'libmutter-test-' + mutter_api_version
@@ -26,13 +25,13 @@ gio_req = '>= 2.79.2'
 gi_req = '>= 1.49.1'
 gjs_req = '>= 1.73.1'
 gtk_req = '>= 4.0'
-mutter_req = '>= 47.0'
+mutter_req = '>= 48.0'
 polkit_req = '>= 0.100'
-schemas_req = '>= 47.alpha'
+schemas_req = '>= 48.beta'
 systemd_req = '>= 246'
-ibus_req = '>= 1.5.19'
 gnome_desktop_req = '>= 40'
 pipewire_req = '>= 0.3.49'
+pango_req = '>= 1.46.0'
 
 nm_req = '>= 1.10.4'
 secret_req = '>= 0.18'
@@ -83,17 +82,21 @@ libxml_dep = dependency('libxml-2.0')
 clutter_dep = dependency(clutter_pc, version: mutter_req)
 mtk_dep = dependency(mtk_pc, version: mutter_req)
 cogl_dep = dependency(cogl_pc, version: mutter_req)
-cogl_pango_dep = dependency(cogl_pango_pc, version: mutter_req)
 mutter_dep = dependency(libmutter_pc, version: mutter_req)
 polkit_dep = dependency('polkit-agent-1', version: polkit_req)
-ibus_dep = dependency('ibus-1.0', version: ibus_req)
 schemas_dep = dependency('gsettings-desktop-schemas', version: schemas_req)
 gnome_desktop_dep = dependency('gnome-desktop-4', version: gnome_desktop_req)
+pango_dep = dependency('pango', version: pango_req)
 
+have_fonts = mutter_dep.get_variable('have_fonts') == 'true'
 have_x11 = mutter_dep.get_variable('have_x11') == 'true'
 have_x11_client = mutter_dep.get_variable('have_x11_client') == 'true'
 if have_x11_client or have_x11
   x11_dep = dependency('x11')
+endif
+
+if not have_fonts
+  error('Shell requires mutter to be built with fonts rendering support')
 endif
 
 
@@ -139,6 +142,7 @@ endif
 mutter_typelibdir = mutter_dep.get_variable('typelibdir')
 python = find_program('python3')
 gjs = find_program('gjs')
+generate_app_list = find_program('meson/generate-app-list.py')
 
 cc = meson.get_compiler('c')
 
@@ -224,6 +228,11 @@ if buildtype != 'plain'
   if get_option('debug')
     gs_c_args += [
       '-DG_ENABLE_DEBUG',
+    ]
+  else
+    gs_c_args += [
+      '-DG_DISABLE_ASSERT',
+      '-DG_DISABLE_CAST_CHECKS',
     ]
   endif
 

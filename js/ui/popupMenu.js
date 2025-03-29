@@ -65,11 +65,11 @@ export function arrowIcon(side) {
 export const PopupBaseMenuItem = GObject.registerClass({
     Properties: {
         'active': GObject.ParamSpec.boolean(
-            'active', 'active', 'active',
+            'active', null, null,
             GObject.ParamFlags.READWRITE,
             false),
         'sensitive': GObject.ParamSpec.boolean(
-            'sensitive', 'sensitive', 'sensitive',
+            'sensitive', null, null,
             GObject.ParamFlags.READWRITE,
             true),
     },
@@ -330,7 +330,7 @@ class PopupSeparatorMenuItem extends PopupBaseMenuItem {
 export const Switch = GObject.registerClass({
     Properties: {
         'state': GObject.ParamSpec.boolean(
-            'state', 'state', 'state',
+            'state', null, null,
             GObject.ParamFlags.READWRITE,
             false),
     },
@@ -531,6 +531,12 @@ export const Switch = GObject.registerClass({
 });
 
 export const PopupSwitchMenuItem = GObject.registerClass({
+    Properties: {
+        'state': GObject.ParamSpec.boolean(
+            'state', null, null,
+            GObject.ParamFlags.READWRITE,
+            false),
+    },
     Signals: {'toggled': {param_types: [GObject.TYPE_BOOLEAN]}},
 }, class PopupSwitchMenuItem extends PopupBaseMenuItem {
     _init(text, active, params) {
@@ -547,7 +553,7 @@ export const PopupSwitchMenuItem = GObject.registerClass({
         this.bind_property('reactive', this._switch, 'reactive', GObject.BindingFlags.SYNC_CREATE);
 
         this.accessible_role = Atk.Role.CHECK_MENU_ITEM;
-        this.checkAccessibleState();
+        this._checkAccessibleState();
         this.label_actor = this.label;
 
         this.add_child(this.label);
@@ -578,7 +584,7 @@ export const PopupSwitchMenuItem = GObject.registerClass({
             this.reactive = true;
             this.accessible_role = Atk.Role.CHECK_MENU_ITEM;
         }
-        this.checkAccessibleState();
+        this._checkAccessibleState();
     }
 
     activate(event) {
@@ -602,17 +608,24 @@ export const PopupSwitchMenuItem = GObject.registerClass({
         return this._switch.state;
     }
 
+    set state(state) {
+        if (this._switch.state === state)
+            return;
+
+        this._switch.set({state});
+    }
+
     setToggleState(state) {
-        this._switch.state = state;
-        this.checkAccessibleState();
+        this.set({state});
     }
 
-    _onToggled(sw, state) {
-        this.emit('toggled', state);
-        this.checkAccessibleState();
+    _onToggled() {
+        this.emit('toggled', this._switch.state);
+        this.notify('state');
+        this._checkAccessibleState();
     }
 
-    checkAccessibleState() {
+    _checkAccessibleState() {
         switch (this.accessible_role) {
         case Atk.Role.CHECK_MENU_ITEM:
             if (this._switch.state)
@@ -675,7 +688,7 @@ export class PopupMenuBase extends Signals.EventEmitter {
         this._parent = null;
 
         this.box = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
             y_expand: true,
         });

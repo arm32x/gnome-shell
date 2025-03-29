@@ -24,6 +24,8 @@ import * as SystemActions from '../misc/systemActions.js';
 
 import * as Main from './main.js';
 
+import * as Config from '../misc/config.js';
+
 const MENU_POPUP_TIMEOUT = 600;
 const POPDOWN_DIALOG_TIMEOUT = 500;
 
@@ -57,27 +59,13 @@ const DIALOG_SHADE_NORMAL = new Cogl.Color({red: 0, green: 0, blue: 0, alpha: 20
 const DIALOG_SHADE_HIGHLIGHT = new Cogl.Color({red: 0, green: 0, blue: 0, alpha: 85});
 
 const DEFAULT_FOLDERS = {
+    'System': {
+        name: 'X-GNOME-Shell-System.directory',
+        apps: Config.SYSTEM_FOLDER_APPS,
+    },
     'Utilities': {
-        name: 'X-GNOME-Utilities.directory',
-        categories: ['X-GNOME-Utilities'],
-        apps: [
-            'gnome-abrt.desktop',
-            'gnome-system-log.desktop',
-            'nm-connection-editor.desktop',
-            'org.gnome.baobab.desktop',
-            'org.gnome.Connections.desktop',
-            'org.gnome.DejaDup.desktop',
-            'org.gnome.Dictionary.desktop',
-            'org.gnome.DiskUtility.desktop',
-            'org.gnome.Evince.desktop',
-            'org.gnome.FileRoller.desktop',
-            'org.gnome.fonts.desktop',
-            'org.gnome.Loupe.desktop',
-            'org.gnome.seahorse.Application.desktop',
-            'org.gnome.tweaks.desktop',
-            'org.gnome.Usage.desktop',
-            'vinagre.desktop',
-        ],
+        name: 'X-GNOME-Shell-Utilities.directory',
+        apps: Config.UTILITIES_FOLDER_APPS,
     },
     'YaST': {
         name: 'suse-yast.directory',
@@ -159,7 +147,7 @@ function _findBestFolderName(apps) {
 export const AppGrid = GObject.registerClass({
     Properties: {
         'indicators-padding': GObject.ParamSpec.boxed('indicators-padding',
-            'Indicators padding', 'Indicators padding',
+            null, null,
             GObject.ParamFlags.READWRITE,
             Clutter.Margin.$gtype),
     },
@@ -484,7 +472,7 @@ var BaseAppView = GObject.registerClass({
     GTypeFlags: GObject.TypeFlags.ABSTRACT,
     Properties: {
         'gesture-modes': GObject.ParamSpec.flags(
-            'gesture-modes', 'gesture-modes', 'gesture-modes',
+            'gesture-modes', null, null,
             GObject.ParamFlags.READWRITE | GObject.ParamFlags.CONSTRUCT_ONLY,
             Shell.ActionMode, Shell.ActionMode.OVERVIEW),
     },
@@ -610,7 +598,7 @@ var BaseAppView = GObject.registerClass({
         scrollContainer._delegate = this;
 
         this._box = new St.BoxLayout({
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
             y_expand: true,
         });
@@ -1434,21 +1422,26 @@ class AppDisplay extends BaseAppView {
         if (this._folderSettings.get_strv('folder-children').length > 0)
             return;
 
+        const appSys = Shell.AppSystem.get_default();
         const folders = Object.keys(DEFAULT_FOLDERS);
         this._folderSettings.set_strv('folder-children', folders);
 
         const {path} = this._folderSettings;
         for (const folder of folders) {
             const {name, categories, apps} = DEFAULT_FOLDERS[folder];
+            const filteredApps = apps
+                ? apps.filter(id => appSys.lookup_app(id) != null)
+                : [];
             const child = new Gio.Settings({
                 schema_id: 'org.gnome.desktop.app-folders.folder',
                 path: `${path}folders/${folder}/`,
             });
             child.set_string('name', name);
             child.set_boolean('translate', true);
-            child.set_strv('categories', categories);
-            if (apps)
-                child.set_strv('apps', apps);
+            if (categories)
+                child.set_strv('categories', categories);
+            if (filteredApps.length > 0)
+                child.set_strv('apps', filteredApps);
         }
     }
 
@@ -2526,7 +2519,7 @@ export const AppFolderDialog = GObject.registerClass({
             y_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
-            vertical: true,
+            orientation: Clutter.Orientation.VERTICAL,
         });
 
         this.child = new St.Bin({

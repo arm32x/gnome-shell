@@ -20,16 +20,15 @@
  */
 
 /**
- * SECTION:st-button
- * @short_description: Button widget
+ * StButton:
+ *
+ * Button widget
  *
  * A button widget with support for either a text label or icon, toggle mode
  * and transitions effects between states.
  */
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
 
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +36,7 @@
 #include <glib.h>
 
 #include <clutter/clutter.h>
+#include <clutter/clutter-pango.h>
 
 #include "st-button.h"
 
@@ -91,7 +91,10 @@ static guint button_signals[LAST_SIGNAL] = { 0, };
 
 G_DEFINE_TYPE_WITH_PRIVATE (StButton, st_button, ST_TYPE_BIN);
 
-static GType st_button_accessible_get_type (void) G_GNUC_CONST;
+G_DECLARE_FINAL_TYPE (StButtonAccessible,
+                      st_button_accessible,
+                      ST, BUTTON_ACCESSIBLE,
+                      StWidgetAccessible)
 
 static void
 st_button_update_label_style (StButton *button)
@@ -446,7 +449,7 @@ st_button_get_property (GObject    *gobject,
       g_value_set_boolean (value, priv->is_checked);
       break;
     case PROP_PRESSED:
-      g_value_set_boolean (value, priv->pressed != 0 || priv->press_sequence != NULL);
+      g_value_set_boolean (value, st_button_get_pressed (ST_BUTTON (gobject)));
       break;
 
 
@@ -495,9 +498,7 @@ st_button_class_init (StButtonClass *klass)
    * The label of the #StButton.
    */
   props[PROP_LABEL] =
-    g_param_spec_string ("label",
-                         "Label",
-                         "Label of the button",
+    g_param_spec_string ("label", NULL, NULL,
                          NULL,
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -507,9 +508,7 @@ st_button_class_init (StButtonClass *klass)
    * The icon name of the #StButton.
    */
   props[PROP_ICON_NAME] =
-    g_param_spec_string ("icon-name",
-                         "Icon name",
-                         "Icon name of the button",
+    g_param_spec_string ("icon-name", NULL, NULL,
                          NULL,
                          ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -519,9 +518,7 @@ st_button_class_init (StButtonClass *klass)
    * Which buttons will trigger the #StButton::clicked signal.
    */
   props[PROP_BUTTON_MASK] =
-    g_param_spec_flags ("button-mask",
-                        "Button mask",
-                        "Which buttons trigger the 'clicked' signal",
+    g_param_spec_flags ("button-mask", NULL, NULL,
                         ST_TYPE_BUTTON_MASK, ST_BUTTON_ONE,
                         ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -531,9 +528,7 @@ st_button_class_init (StButtonClass *klass)
    * Whether the #StButton is operating in toggle mode (on/off).
    */
   props[PROP_TOGGLE_MODE] =
-    g_param_spec_boolean ("toggle-mode",
-                          "Toggle Mode",
-                          "Enable or disable toggling",
+    g_param_spec_boolean ("toggle-mode", NULL, NULL,
                           FALSE,
                           ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -547,9 +542,7 @@ st_button_class_init (StButtonClass *klass)
    * pseudo-class set.
    */
   props[PROP_CHECKED] =
-    g_param_spec_boolean ("checked",
-                          "Checked",
-                          "Indicates if a toggle button is \"on\" or \"off\"",
+    g_param_spec_boolean ("checked", NULL, NULL,
                           FALSE,
                           ST_PARAM_READWRITE | G_PARAM_EXPLICIT_NOTIFY);
 
@@ -560,9 +553,7 @@ st_button_class_init (StButtonClass *klass)
    * #StButton is being actively pressed, rather than just in the "on" state.
    */
   props[PROP_PRESSED] =
-    g_param_spec_boolean ("pressed",
-                          "Pressed",
-                          "Indicates if the button is pressed in",
+    g_param_spec_boolean ("pressed", NULL, NULL,
                           FALSE,
                           ST_PARAM_READABLE);
 
@@ -889,6 +880,25 @@ st_button_set_checked (StButton *button,
 }
 
 /**
+ * st_button_get_pressed:
+ * @button: a #StButton
+ *
+ * Get the #StButton:pressed property of a #StButton
+ *
+ * Returns: %TRUE if the button is pressed, or %FALSE if not
+ */
+gboolean
+st_button_get_pressed (StButton *button)
+{
+  StButtonPrivate *priv;
+
+  g_return_val_if_fail (ST_IS_BUTTON (button), FALSE);
+
+  priv = st_button_get_instance_private (button);
+  return priv->pressed != 0 || priv->press_sequence != NULL;
+}
+
+/**
  * st_button_fake_release:
  * @button: an #StButton
  *
@@ -923,44 +933,17 @@ st_button_fake_release (StButton *button)
 
 #define ST_TYPE_BUTTON_ACCESSIBLE st_button_accessible_get_type ()
 
-#define ST_BUTTON_ACCESSIBLE(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST ((obj), \
-  ST_TYPE_BUTTON_ACCESSIBLE, StButtonAccessible))
-
-#define ST_IS_BUTTON_ACCESSIBLE(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE ((obj), \
-  ST_TYPE_BUTTON_ACCESSIBLE))
-
-#define ST_BUTTON_ACCESSIBLE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST ((klass), \
-  ST_TYPE_BUTTON_ACCESSIBLE, StButtonAccessibleClass))
-
-#define ST_IS_BUTTON_ACCESSIBLE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE ((klass), \
-  ST_TYPE_BUTTON_ACCESSIBLE))
-
-#define ST_BUTTON_ACCESSIBLE_GET_CLASS(obj) \
-  (G_TYPE_INSTANCE_GET_CLASS ((obj), \
-  ST_TYPE_BUTTON_ACCESSIBLE, StButtonAccessibleClass))
-
-typedef struct _StButtonAccessible  StButtonAccessible;
-typedef struct _StButtonAccessibleClass  StButtonAccessibleClass;
-
-struct _StButtonAccessible
+typedef struct _StButtonAccessible
 {
   StWidgetAccessible parent;
-};
+} StButtonAccessible;
 
-struct _StButtonAccessibleClass
-{
-  StWidgetAccessibleClass parent_class;
-};
 
 /* AtkObject */
 static void          st_button_accessible_initialize (AtkObject *obj,
                                                       gpointer   data);
 
-G_DEFINE_TYPE (StButtonAccessible, st_button_accessible, ST_TYPE_WIDGET_ACCESSIBLE)
+G_DEFINE_FINAL_TYPE (StButtonAccessible, st_button_accessible, ST_TYPE_WIDGET_ACCESSIBLE)
 
 static const gchar *
 st_button_accessible_get_name (AtkObject *obj)

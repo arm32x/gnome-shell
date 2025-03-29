@@ -22,8 +22,7 @@
 #error "Only <st/st.h> can be included directly.h"
 #endif
 
-#ifndef __ST_BUTTON_H__
-#define __ST_BUTTON_H__
+#pragma once
 
 G_BEGIN_DECLS
 
@@ -57,6 +56,7 @@ gboolean     st_button_get_toggle_mode (StButton     *button);
 void         st_button_set_checked     (StButton     *button,
                                         gboolean      checked);
 gboolean     st_button_get_checked     (StButton     *button);
+gboolean     st_button_get_pressed     (StButton     *button);
 
 void         st_button_fake_release    (StButton     *button);
 
@@ -81,5 +81,3 @@ void         st_button_set_button_mask (StButton     *button,
 StButtonMask st_button_get_button_mask (StButton     *button);
 
 G_END_DECLS
-
-#endif /* __ST_BUTTON_H__ */

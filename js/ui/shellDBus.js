@@ -15,6 +15,7 @@ import {ControlsState} from './overviewControls.js';
 
 const GnomeShellIface = loadInterfaceXML('org.gnome.Shell');
 const ScreenSaverIface = loadInterfaceXML('org.gnome.ScreenSaver');
+const ScreenTimeIface = loadInterfaceXML('org.gnome.Shell.ScreenTime');
 
 export class GnomeShell {
     constructor() {
@@ -24,6 +25,7 @@ export class GnomeShell {
         this._senderChecker = new DBusSenderChecker([
             'org.gnome.Settings',
             'org.gnome.SettingsDaemon.MediaKeys',
+            'org.freedesktop.impl.portal.desktop.gnome',
         ]);
 
         this._extensionsService = new GnomeShellExtensions();
@@ -35,6 +37,10 @@ export class GnomeShell {
         global.display.connect('accelerator-activated',
             (display, action, device, timestamp) => {
                 this._emitAcceleratorActivated(action, device, timestamp);
+            });
+        global.display.connect('accelerator-deactivated',
+            (display, action, device, timestamp) => {
+                this._emitAcceleratorDeactivated(action, device, timestamp);
             });
 
         this._cachedOverviewVisible = false;
@@ -270,7 +276,7 @@ export class GnomeShell {
         invocation.return_value(null);
     }
 
-    _emitAcceleratorActivated(action, device, timestamp) {
+    _emitAcceleratorSignal(signal, action, device, timestamp) {
         let destination = this._grabbedAccelerators.get(action);
         if (!destination)
             return;
@@ -290,8 +296,18 @@ export class GnomeShell {
             destination,
             this._dbusImpl.get_object_path(),
             info?.name ?? null,
-            'AcceleratorActivated',
+            signal,
             GLib.Variant.new('(ua{sv})', [action, params]));
+    }
+
+    _emitAcceleratorActivated(action, device, timestamp) {
+        this._emitAcceleratorSignal(
+            'AcceleratorActivated', action, device, timestamp);
+    }
+
+    _emitAcceleratorDeactivated(action, device, timestamp) {
+        this._emitAcceleratorSignal(
+            'AcceleratorDeactivated', action, device, timestamp);
     }
 
     _grabAcceleratorForSender(accelerator, modeFlags, grabFlags, sender) {
@@ -540,5 +556,32 @@ export class ScreenSaverDBus {
             return Math.floor((GLib.get_monotonic_time() - started) / 1000000);
         else
             return 0;
+    }
+}
+
+export class ScreenTimeDBus {
+    constructor(breakManager) {
+        this._manager = breakManager;
+
+        this._manager.connect('notify::state', this._onNotify.bind(this));
+        this._manager.connect('notify::last-break-end-time', this._onNotify.bind(this));
+
+        this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(ScreenTimeIface, this);
+        this._dbusImpl.export(Gio.DBus.session, '/org/gnome/Shell/ScreenTime');
+    }
+
+    _onNotify() {
+        // We always want to notify the two properties together, as clients need
+        // both values to be useful. GJS will combine the two emissions for us.
+        this._dbusImpl.emit_property_changed('State', new GLib.Variant('u', this.State));
+        this._dbusImpl.emit_property_changed('LastBreakEndTime', new GLib.Variant('t', this.LastBreakEndTime));
+    }
+
+    get State() {
+        return this._manager.state;
+    }
+
+    get LastBreakEndTime() {
+        return this._manager.lastBreakEndTime;
     }
 }

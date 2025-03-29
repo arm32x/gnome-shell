@@ -1,9 +1,19 @@
 include:
-  - remote: 'https://gitlab.gnome.org/GNOME/citemplates/raw/HEAD/flatpak/flatpak_ci_initiative.yml'
-  - remote: 'https://gitlab.freedesktop.org/freedesktop/ci-templates/-/raw/057b052e682d8e5a20c1eb2dd60d5b87d2b56856/templates/fedora.yml'
-  - remote: 'https://gitlab.freedesktop.org/freedesktop/ci-templates/-/raw/bc70242ffb8402243e934659ecc1a2d1c89eca2b/templates/ci-fairy.yml'
-  - project: 'Infrastructure/openshift-images/gnome-release-service'
-    file: '/ci-templates/release-module.yml'
+  - project: 'GNOME/citemplates'
+    file: 'templates/default-rules.yml'
+  - project: 'GNOME/citemplates'
+    file: 'flatpak/flatpak_ci_initiative.yml'
+  - project: 'Infrastructure/freedesktop-ci-templates'
+    file: 'templates/fedora.yml'
+    ref: '057b052e682d8e5a20c1eb2dd60d5b87d2b56856'
+  - project: 'Infrastructure/freedesktop-ci-templates'
+    file: 'templates/ci-fairy.yml'
+    ref: 'bc70242ffb8402243e934659ecc1a2d1c89eca2b'
+  - component: gitlab.gnome.org/GNOME/citemplates/release-service@master
+    inputs:
+      job-stage: deploy
+      dist-job-name: "dist-tarball"
+      tarball-artifact-path: $TARBALL_ARTIFACT_PATH
   - component: gitlab.gnome.org/GNOME/citemplates/gnomeos-build-sysext@1.0.0-alpha.1
     inputs:
       meson-options:
@@ -15,9 +25,10 @@ build-sysext:
     - x86_64_v3
   before_script:
     - .gitlab-ci/install-gnomeos-sysext-dependencies.sh $CI_PROJECT_DIR/extension
+  when: manual
 
 stages:
-  - pre_review
+  - pre-review
   - prep
   - review
   - build
@@ -28,31 +39,14 @@ stages:
 
 default:
   image: $MUTTER_CI_IMAGE
-  # Cancel jobs if newer commits are pushed to the branch
-  interruptible: true
-  # Auto-retry jobs in case of infra failures
-  retry:
-    max: 1
-    when:
-      - 'runner_system_failure'
-      - 'stuck_or_timeout_failure'
-      - 'scheduler_failure'
-      - 'api_failure'
 
 variables:
-  MUTTER_CI_IMAGE: registry.gitlab.gnome.org/gnome/mutter/fedora/40:x86_64-2024-08-29.2
+  MUTTER_CI_IMAGE: registry.gitlab.gnome.org/gnome/mutter/fedora/41:x86_64-2025-02-19.1
   FDO_UPSTREAM_REPO: GNOME/gnome-shell
   BUNDLE: "extensions-git.flatpak"
   LINT_LOG: "eslint-report.xml"
   LINT_MR_LOG: "eslint-mr-report.xml"
-
-workflow:
-  rules:
-    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"'
-      when: never
-    - if: '$CI_MERGE_REQUEST_IID'
-    - if: '$CI_COMMIT_TAG'
-    - if: '$CI_COMMIT_BRANCH'
+  TARBALL_ARTIFACT_PATH: build/meson-dist/$CI_PROJECT_NAME-$CI_COMMIT_TAG.tar.xz
 
 .pipeline-guard:
   rules:
@@ -64,8 +58,8 @@ workflow:
 
 .gnome-shell.fedora:
   variables:
-    FDO_DISTRIBUTION_VERSION: 40
-    FDO_DISTRIBUTION_TAG: '2024-07-11.0'
+    FDO_DISTRIBUTION_VERSION: 41
+    FDO_DISTRIBUTION_TAG: '2024-10-18.0'
     FDO_DISTRIBUTION_PACKAGES:
       gjs
       nodejs
@@ -92,10 +86,10 @@ workflow:
         https://gitlab.gnome.org/GNOME/gnome-shell.git \
         main
 
-check_commit_log:
+check-commit-log:
   extends:
     - .fdo.ci-fairy
-  stage: pre_review
+  stage: pre-review
   variables:
     GIT_DEPTH: "100"
   script:
@@ -117,7 +111,7 @@ check_commit_log:
 check-merge-request:
   extends:
     - .fdo.ci-fairy
-  stage: pre_review
+  stage: pre-review
   script:
     - if [[ x"$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "x" ]] ;
       then
@@ -134,13 +128,18 @@ check-merge-request:
     reports:
       junit: check-merge-request-report.xml
 
+.dummy-container-build:
+  script:
+    - echo Dummy container build
+
 build-fedora-container:
   extends:
-    - .fdo.container-build@fedora@x86_64
+    #- .fdo.container-build@fedora@x86_64
+    - .dummy-container-build
     - .gnome-shell.fedora
   stage: prep
 
-js_check:
+js-check:
   extends:
       - .fdo.distribution-image@fedora
       - .gnome-shell.fedora
@@ -179,7 +178,7 @@ eslint-doc:
         - .eslintrc.yml
         - lint/*
 
-potfile_c_check:
+potfile-c-check:
   extends:
     - .fdo.distribution-image@fedora
     - .gnome-shell.fedora
@@ -187,7 +186,7 @@ potfile_c_check:
   script:
     - ./.gitlab-ci/check-potfiles.sh
 
-potfile_js_check:
+potfile-js-check:
   extends:
     - .fdo.distribution-image@fedora
     - .gnome-shell.fedora
@@ -200,7 +199,7 @@ potfile_js_check:
 
 build:
   stage: build
-  needs: ["check_commit_log"]
+  needs: ["check-commit-log"]
   before_script:
     - .gitlab-ci/checkout-mutter.sh
     - meson mutter mutter/build --prefix=/usr
@@ -263,7 +262,7 @@ test-coverity:
 
 flatpak:
   stage: build
-  needs: ["check_commit_log"]
+  needs: ["check-commit-log"]
   variables:
     SUBPROJECT: "subprojects/extensions-app"
     # Your manifest path
@@ -277,20 +276,6 @@ nightly:
   extends: '.publish_nightly'
   needs:
     - flatpak
-
-distinfo:
-  stage: deploy
-  needs:
-    - build
-  script:
-    - .gitlab-ci/export-artifact-path build > dist.env
-  artifacts:
-    reports:
-      dotenv: dist.env
-    paths:
-      - dist.env
-  rules:
-    - if: '$CI_COMMIT_TAG'
 
 dist:
   variables:
@@ -314,21 +299,12 @@ dist-tarball:
   extends: dist
   needs:
     - build
-    - distinfo
   artifacts:
     expose_as: 'Get tarball here'
+    name: "${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    when: always
     paths:
       - $TARBALL_ARTIFACT_PATH
-    reports:
-      dotenv: dist.env
-  rules:
-    - if: '$CI_COMMIT_TAG'
-
-release-module:
-  stage: deploy
-  needs:
-    - dist-tarball
-  extends: .release-module
   rules:
     - if: '$CI_COMMIT_TAG'
 
