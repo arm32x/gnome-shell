@@ -36,7 +36,8 @@ export const Slider = GObject.registerClass({
         super.vfunc_style_changed();
 
         const themeNode = this.get_theme_node();
-        this._handleRadius = themeNode.get_length('-slider-handle-radius');
+        this._handleRadius =
+            Math.round(2 * themeNode.get_length('-slider-handle-radius')) / 2;
     }
 
     vfunc_repaint() {
@@ -48,18 +49,17 @@ export const Slider = GObject.registerClass({
         let [width, height] = this.get_surface_size();
         const rtl = this.get_text_direction() === Clutter.TextDirection.RTL;
 
-        const ceiledHandleRadius = Math.ceil(this._handleRadius);
         const handleY = height / 2;
 
-        let handleX = ceiledHandleRadius +
-            (width - 2 * ceiledHandleRadius) * this._value / this._maxValue;
+        let handleX = this._handleRadius +
+            (width - 2 * this._handleRadius) * this._value / this._maxValue;
         if (rtl)
             handleX = width - handleX;
 
         let color = themeNode.get_foreground_color();
         cr.setSourceColor(color);
         cr.arc(handleX, handleY, this._handleRadius, 0, 2 * Math.PI);
-        cr.fillPreserve();
+        cr.fill();
         cr.$dispose();
     }
 
@@ -85,13 +85,11 @@ export const Slider = GObject.registerClass({
 
         this._dragging = true;
 
-        let device = event.get_device();
-        let sequence = event.get_event_sequence();
-
         this._grab = global.stage.grab(this);
 
-        this._grabbedDevice = device;
-        this._grabbedSequence = sequence;
+        const backend = global.stage.get_context().get_backend();
+        const sprite = backend.get_sprite(global.stage, event);
+        this._sprite = sprite;
 
         // We need to emit 'drag-begin' before moving the handle to make
         // sure that no 'notify::value' signal is emitted before this one.
@@ -115,8 +113,6 @@ export const Slider = GObject.registerClass({
                 this._grab = null;
             }
 
-            this._grabbedSequence = null;
-            this._grabbedDevice = null;
             this._dragging = false;
 
             this.emit('drag-end');
@@ -124,22 +120,25 @@ export const Slider = GObject.registerClass({
         return Clutter.EVENT_STOP;
     }
 
-    vfunc_button_release_event() {
-        if (this._dragging && !this._grabbedSequence)
+    vfunc_button_release_event(event) {
+        const backend = global.stage.get_context().get_backend();
+        const sprite = backend.get_sprite(global.stage, event);
+
+        if (this._dragging && this._sprite === sprite)
             return this._endDragging();
 
         return Clutter.EVENT_PROPAGATE;
     }
 
     vfunc_touch_event(event) {
-        let sequence = event.get_event_sequence();
+        const backend = global.stage.get_context().get_backend();
+        const sprite = backend.get_pointer_sprite(global.stage);
 
         if (!this._dragging &&
             event.type() === Clutter.EventType.TOUCH_BEGIN) {
             this.startDragging(event);
             return Clutter.EVENT_STOP;
-        } else if (this._grabbedSequence &&
-                   sequence.get_slot() === this._grabbedSequence.get_slot()) {
+        } else if (this._sprite === sprite) {
             if (event.type() === Clutter.EventType.TOUCH_UPDATE)
                 return this._motionEvent(this, event);
             else if (event.type() === Clutter.EventType.TOUCH_END)
@@ -149,35 +148,49 @@ export const Slider = GObject.registerClass({
         return Clutter.EVENT_PROPAGATE;
     }
 
-    scroll(event) {
+    step(nSteps) {
+        const delta = nSteps * SLIDER_SCROLL_STEP;
+        const value = Math.min(Math.max(0, this._value + delta), this._maxValue);
+
+        if (value !== this.value) {
+            this.value = value;
+            return true;
+        }
+
+        return false;
+    }
+
+    vfunc_scroll_event(event) {
         let direction = event.get_scroll_direction();
-        let delta = 0;
+        let nSteps = 0;
 
         if (event.get_flags() & Clutter.EventFlags.FLAG_POINTER_EMULATED)
             return Clutter.EVENT_PROPAGATE;
 
         if (direction === Clutter.ScrollDirection.DOWN) {
-            delta = -SLIDER_SCROLL_STEP;
+            nSteps = -1;
         } else if (direction === Clutter.ScrollDirection.UP) {
-            delta = SLIDER_SCROLL_STEP;
+            nSteps = 1;
         } else if (direction === Clutter.ScrollDirection.SMOOTH) {
-            let [, dy] = event.get_scroll_delta();
-            // Even though the slider is horizontal, use dy to match
-            // the UP/DOWN above.
-            delta = -dy * SLIDER_SCROLL_STEP;
+            let [dx] = event.get_scroll_delta();
+            nSteps = dx;
+            // Match physical direction
+            if (event.get_scroll_flags() & Clutter.ScrollFlags.INVERTED)
+                nSteps *= -1;
+            if (this.get_text_direction() === Clutter.TextDirection.RTL)
+                nSteps *= -1;
         }
 
-        this.value = Math.min(Math.max(0, this._value + delta), this._maxValue);
+        this.step(nSteps);
 
         return Clutter.EVENT_STOP;
     }
 
-    vfunc_scroll_event(event) {
-        return this.scroll(event);
-    }
-
     vfunc_motion_event(event) {
-        if (this._dragging && !this._grabbedSequence)
+        const backend = global.stage.get_context().get_backend();
+        const sprite = backend.get_sprite(global.stage, event);
+
+        if (this._dragging && this._sprite === sprite)
             return this._motionEvent(this, event);
 
         return Clutter.EVENT_PROPAGATE;

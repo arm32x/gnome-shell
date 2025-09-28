@@ -185,6 +185,10 @@ shell_tray_icon_allocate (ClutterActor          *actor,
 
   CLUTTER_ACTOR_CLASS (shell_tray_icon_parent_class)->allocate (actor, box);
 
+  na_xembed_set_available_size (NA_XEMBED (tray_icon->tray_child),
+                                roundf (clutter_actor_box_get_width (box)),
+                                roundf (clutter_actor_box_get_height (box)));
+
   /* Find the actor's new coordinates in terms of the stage.
    */
   clutter_actor_get_transformed_position (actor, &wx, &wy);
@@ -235,6 +239,7 @@ shell_tray_icon_set_child (ShellTrayIcon *tray_icon,
   MetaDisplay *display = shell_global_get_display (shell_global_get ());
 
   g_return_if_fail (tray_icon != NULL);
+  g_return_if_fail (tray_icon->tray_child == NULL);
   g_return_if_fail (tray_child != NULL);
 
   /* We do all this now rather than computing it on the fly later,
@@ -255,6 +260,10 @@ shell_tray_icon_set_child (ShellTrayIcon *tray_icon,
                       "window-created",
                       G_CALLBACK (shell_tray_icon_window_created_cb),
                       tray_icon);
+
+  g_signal_connect_object (tray_child, "reconfigured",
+                           G_CALLBACK (clutter_actor_queue_relayout),
+                           tray_icon, G_CONNECT_SWAPPED);
 }
 
 /*

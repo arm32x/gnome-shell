@@ -4,9 +4,9 @@ service_data = configuration_data()
 service_data.set('libexecdir', libexecdir)
 
 introspection_common = {
-  'install_dir_gir': pkgdatadir,
+  'install_gir': false,
+  'install_typelib': true,
   'install_dir_typelib': pkglibdir,
-  'install': true,
   'fatal_warnings': get_option('werror'),
 }
 
@@ -113,6 +113,7 @@ libshell_public_headers = [
   'shell-app-usage.h',
   'shell-blur-effect.h',
   'shell-camera-monitor.h',
+  'shell-edge-drag-gesture.h',
   'shell-glsl-effect.h',
   'shell-global.h',
   'shell-invert-lightness-effect.h',
@@ -164,6 +165,7 @@ libshell_sources = [
   'shell-app-usage.c',
   'shell-blur-effect.c',
   'shell-camera-monitor.c',
+  'shell-edge-drag-gesture.c',
   'shell-global.c',
   'shell-glsl-effect.c',
   'shell-invert-lightness-effect.c',
@@ -257,6 +259,7 @@ libshell_gir_includes = [
   'Clutter-@0@'.format(mutter_api_version),
   'Meta-@0@'.format(mutter_api_version),
   'Gcr-4',
+  'GioUnix-2.0',
   'PolkitAgent-1.0',
   'GdkPixbuf-2.0'
 ]
@@ -279,7 +282,7 @@ libshell_gir = gnome.generate_gir(libshell,
   kwargs: introspection_common,
 )
 
-executable('gnome-shell', 'main.c',
+gnome_shell_binary = executable('gnome-shell', 'main.c',
   c_args: gnome_shell_cflags + typelib_cflags,
   dependencies: gnome_shell_deps + [libshell_dep, libst_dep, mutter_dep],
   include_directories: [conf_inc],
@@ -299,7 +302,7 @@ if have_portal_helper
   )
 endif
 
-executable('gnome-shell-perf-helper', 'shell-perf-helper.c', js_resources,
+gnome_shell_perf_helper = executable('gnome-shell-perf-helper', 'shell-perf-helper.c', js_resources,
   dependencies: [gtk_dep, gio_dep, m_dep],
   include_directories: [conf_inc],
   install_dir: libexecdir,

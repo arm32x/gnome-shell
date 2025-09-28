@@ -64,8 +64,8 @@ function ssidToLabel(ssid) {
 }
 
 function launchSettingsPanel(panel, ...args) {
-    const param = new GLib.Variant('(sav)',
-        [panel, args.map(s => new GLib.Variant('s', s))]);
+    const param = new GLib.Variant('av',
+        [new GLib.Variant('(sav)', [panel, args.map(s => new GLib.Variant('s', s))])]);
 
     const app = Shell.AppSystem.get_default()
         .lookup_app('org.gnome.Settings.desktop');
@@ -116,7 +116,7 @@ class ItemSorter {
     }
 
     _sortByName(one, two) {
-        return GLib.utf8_collate(one.name, two.name);
+        return GLib.utf8_collate(one.name ?? '', two.name ?? '');
     }
 
     _sortByMru(one, two) {
@@ -500,7 +500,8 @@ const NMDeviceItem = GObject.registerClass({
     }
 
     _syncConnections() {
-        const available = this._device.get_available_connections();
+        const available = this._device.get_available_connections().filter(
+            c => c.get_id() != null);
         const removed = [...this._connectionItems.keys()]
             .filter(conn => !available.includes(conn));
 
@@ -1134,6 +1135,7 @@ const NMWirelessDeviceItem = GObject.registerClass({
 
         switch (this.state) {
         case NM.ActiveConnectionState.ACTIVATING:
+        case NM.ActiveConnectionState.DEACTIVATING:
             return 'network-wireless-acquiring-symbolic';
 
         case NM.ActiveConnectionState.ACTIVATED: {
@@ -1147,7 +1149,7 @@ const NMWirelessDeviceItem = GObject.registerClass({
                 if (this._device.mode !== NM80211Mode.ADHOC)
                     console.info('An active wireless connection, in infrastructure mode, involves no access point?');
 
-                return 'network-wireless-connected-symbolic';
+                return 'network-wireless-offline-symbolic';
             }
 
             const {strength} = this._activeAccessPoint;
@@ -1323,6 +1325,16 @@ const NMVpnConnectionItem = GObject.registerClass({
         this.bind_property('is-active',
             this._switch, 'state',
             GObject.BindingFlags.SYNC_CREATE);
+
+        // Switch handle is reactive, so events don't propagate to the item;
+        // activate it manually in that case
+        this._switch.connect('notify::state', () => {
+            if (this.is_active === this._switch.state)
+                return;
+
+            this.activate();
+        });
+
         this.bind_property('name',
             this._label, 'text',
             GObject.BindingFlags.SYNC_CREATE);
@@ -1531,6 +1543,7 @@ class NMVpnToggle extends NMToggle {
         super();
 
         this.menu.setHeader('network-vpn-symbolic', _('VPN'));
+        this.menuButtonAccessibleName = _('Open VPN menu');
         this.menu.addSettingsAction(_('VPN Settings'),
             'gnome-network-panel.desktop');
     }
@@ -1792,6 +1805,7 @@ class NMWirelessToggle extends NMDeviceToggle {
         });
 
         this.menu.setHeader('network-wireless-symbolic', _('Wi–Fi'));
+        this.menuButtonAccessibleName = _('Open Wi–Fi menu');
         this.menu.addHeaderSuffix(this._scanningSpinner);
         this.menu.addSettingsAction(_('All Networks'),
             'gnome-wifi-panel.desktop');
@@ -1891,6 +1905,7 @@ class NMWiredToggle extends NMDeviceToggle {
         super(NM.DeviceType.ETHERNET);
 
         this.menu.setHeader('network-wired-symbolic', _('Wired Connections'));
+        this.menuButtonAccessibleName = _('Open wired connections menu');
         this.menu.addSettingsAction(_('Wired Settings'),
             'gnome-network-panel.desktop');
     }
@@ -1906,6 +1921,7 @@ class NMBluetoothToggle extends NMDeviceToggle {
         super(NM.DeviceType.BT);
 
         this.menu.setHeader('network-cellular-symbolic', _('Bluetooth Tethers'));
+        this.menuButtonAccessibleName = _('Open Bluetooth tethers menu');
         this.menu.addSettingsAction(_('Bluetooth Settings'),
             'gnome-network-panel.desktop');
     }
@@ -1926,6 +1942,7 @@ class NMModemToggle extends NMDeviceToggle {
         super(NM.DeviceType.MODEM);
 
         this.menu.setHeader('network-cellular-symbolic', _('Mobile Connections'));
+        this.menuButtonAccessibleName = _('Open mobile connections menu');
 
         const settingsLabel = _('Mobile Broadband Settings');
         this._wwanSettings = this.menu.addSettingsAction(settingsLabel,
@@ -1970,7 +1987,7 @@ class CaptivePortalHandler extends Signals.EventEmitter {
         const source = MessageTray.getSystemSource();
 
         const notification = new MessageTray.Notification({
-            title: _('Sign Into Wi–Fi Network'),
+            title: _('Sign in to Network'),
             body: name,
             source,
         });
@@ -2004,7 +2021,7 @@ class CaptivePortalHandler extends Signals.EventEmitter {
         Main.panel.closeCalendar();
     }
 
-    _portalHelperDone(parameters) {
+    _portalHelperStatusChanged(parameters) {
         const [path, result] = parameters;
 
         if (result === PortalHelperResult.CANCELLED) {
@@ -2030,9 +2047,9 @@ class CaptivePortalHandler extends Signals.EventEmitter {
                 g_interface_name: PortalHelperInfo.name,
                 g_interface_info: PortalHelperInfo,
             });
-            this._portalHelperProxy.connectSignal('Done',
+            this._portalHelperProxy.connectSignal('StatusChanged',
                 (proxy, emitter, params) => {
-                    this._portalHelperDone(params);
+                    this._portalHelperStatusChanged(params);
                 });
 
             try {
@@ -2126,7 +2143,7 @@ class Indicator extends SystemIndicator {
                 const state = await this._client.check_connectivity_async(null);
                 if (state >= NM.ConnectivityState.FULL)
                     this._portalHandler.removeConnection(path);
-            } catch (e) { }
+            } catch {}
         });
 
         this._client.connectObject(
@@ -2198,6 +2215,9 @@ class Indicator extends SystemIndicator {
             return;
         }
 
+        if (Main.sessionMode.isGreeter)
+            return;
+
         let isPortal = this._client.connectivity === NM.ConnectivityState.PORTAL;
         // For testing, allow interpreting any value != FULL as PORTAL, because
         // LIMITED (no upstream route after the default gateway) is easy to obtain
@@ -2206,12 +2226,14 @@ class Indicator extends SystemIndicator {
         // (but in general we should only prompt a portal if we know there is a portal)
         if (GLib.getenv('GNOME_SHELL_CONNECTIVITY_TEST') != null)
             isPortal ||= this._client.connectivity < NM.ConnectivityState.FULL;
-        if (!isPortal || Main.sessionMode.isGreeter)
-            return;
 
-        this._portalHandler.addConnection(
-            this._mainConnection.get_id(),
-            this._mainConnection.get_path());
+        if (isPortal) {
+            this._portalHandler.addConnection(
+                this._mainConnection.get_id(),
+                this._mainConnection.get_path());
+        } else {
+            this._portalHandler.clear();
+        }
     }
 
     _updateIcon() {

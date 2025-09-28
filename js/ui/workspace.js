@@ -1068,20 +1068,20 @@ class Workspace extends St.Widget {
         if (monitorIndex !== Main.layoutManager.primaryIndex)
             this.add_style_class_name('external-monitor');
 
-        const clickAction = new Clutter.ClickAction();
-        clickAction.connect('clicked', action => {
+        const clickGesture = new Clutter.ClickGesture({
+            required_button: Clutter.BUTTON_PRIMARY,
+        });
+        clickGesture.connect('recognize', () => {
             // Switch to the workspace when not the active one, leave the
             // overview otherwise.
-            if (action.get_button() === 1 || action.get_button() === 0) {
-                const leaveOverview = this._shouldLeaveOverview();
+            const leaveOverview = this._shouldLeaveOverview();
 
-                this.metaWorkspace?.activate(global.get_current_time());
-                if (leaveOverview)
-                    Main.overview.hide();
-            }
+            this.metaWorkspace?.activate(global.get_current_time());
+            if (leaveOverview)
+                Main.overview.hide();
         });
-        this.bind_property('mapped', clickAction, 'enabled', GObject.BindingFlags.SYNC_CREATE);
-        this._container.add_action(clickAction);
+        this.bind_property('mapped', clickGesture, 'enabled', GObject.BindingFlags.SYNC_CREATE);
+        this._container.add_action(clickGesture);
 
         this.connect('style-changed', this._onStyleChanged.bind(this));
         this.connect('destroy', this._onDestroy.bind(this));
@@ -1273,14 +1273,11 @@ class Workspace extends St.Widget {
 
     // check for maximized windows on the workspace
     hasMaximizedWindows() {
-        for (let i = 0; i < this._windows.length; i++) {
-            let metaWindow = this._windows[i].metaWindow;
-            if (metaWindow.showing_on_its_workspace() &&
-                metaWindow.maximized_horizontally &&
-                metaWindow.maximized_vertically)
-                return true;
-        }
-        return false;
+        return this._windows.some(w => {
+            const {metaWindow} = w;
+            return metaWindow.showing_on_its_workspace() &&
+                   metaWindow.is_maximized();
+        });
     }
 
     _clearSkipTaskbarSignals() {

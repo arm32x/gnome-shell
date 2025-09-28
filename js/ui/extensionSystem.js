@@ -9,7 +9,7 @@ import * as Config from '../misc/config.js';
 import * as ExtensionDownloader from './extensionDownloader.js';
 import {formatError} from '../misc/errorUtils.js';
 import {
-    ExtensionState, ExtensionType, loadExtensionMetadata
+    ExtensionState, ExtensionType, loadExtensionMetadata,
 } from '../misc/extensionUtils.js';
 import * as FileUtils from '../misc/fileUtils.js';
 import * as Main from './main.js';
@@ -571,16 +571,6 @@ export class ExtensionManager extends Signals.EventEmitter {
                 this.emit('extension-state-changed', extension);
         }
 
-        // Find and enable all the newly enabled extensions: UUIDs found in the
-        // new setting, but not in the old one.
-        const extensionsToEnable = newEnabledExtensions
-            .filter(uuid => !this._enabledExtensions.includes(uuid) &&
-                             this._extensionSupportsSessionMode(uuid));
-        for (const uuid of extensionsToEnable) {
-            // eslint-disable-next-line no-await-in-loop
-            await this._callExtensionEnable(uuid);
-        }
-
         // Find and disable all the newly disabled extensions: UUIDs found in the
         // old setting, but not in the new one.
         const extensionsToDisable = this._extensionOrder
@@ -592,6 +582,16 @@ export class ExtensionManager extends Signals.EventEmitter {
         for (const uuid of extensionsToDisable) {
             // eslint-disable-next-line no-await-in-loop
             await this._callExtensionDisable(uuid);
+        }
+
+        // Find and enable all the newly enabled extensions: UUIDs found in the
+        // new setting, but not in the old one.
+        const extensionsToEnable = newEnabledExtensions
+            .filter(uuid => !this._enabledExtensions.includes(uuid) &&
+                             this._extensionSupportsSessionMode(uuid));
+        for (const uuid of extensionsToEnable) {
+            // eslint-disable-next-line no-await-in-loop
+            await this._callExtensionEnable(uuid);
         }
 
         this._enabledExtensions = newEnabledExtensions;
@@ -656,7 +656,7 @@ export class ExtensionManager extends Signals.EventEmitter {
         if (!this.updatesSupported)
             return;
 
-        for (const {dir, info} of FileUtils.collectFromDatadirs('extension-updates', true)) {
+        for (const {file: dir, info} of FileUtils.collectFromDatadirs('extension-updates', true)) {
             let fileType = info.get_file_type();
             if (fileType !== Gio.FileType.DIRECTORY)
                 continue;
@@ -667,10 +667,14 @@ export class ExtensionManager extends Signals.EventEmitter {
             try {
                 FileUtils.recursivelyDeleteDir(extensionDir, false);
                 FileUtils.recursivelyMoveDir(dir, extensionDir);
-            } catch (e) {
+            } catch {
                 log(`Failed to install extension updates for ${uuid}`);
-            } finally {
+            }
+
+            try {
                 FileUtils.recursivelyDeleteDir(dir, true);
+            } catch (e) {
+                console.error(`Failed to delete extension update: ${e.message}`);
             }
         }
     }
@@ -707,7 +711,7 @@ export class ExtensionManager extends Signals.EventEmitter {
 
         const includeUserDir = global.settings.get_boolean('allow-extension-installation');
         const extensionFiles = [...FileUtils.collectFromDatadirs('extensions', includeUserDir)];
-        const extensionObjects = extensionFiles.map(({dir, info}) => {
+        const extensionObjects = extensionFiles.map(({file: dir, info}) => {
             let fileType = info.get_file_type();
             if (fileType !== Gio.FileType.DIRECTORY)
                 return null;

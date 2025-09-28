@@ -175,6 +175,7 @@ export const TimeLimitsManager = GObject.registerClass({
         this._timerId = 0;
         this._timeChangeId = 0;
         this._clockOffsetSecs = 0;
+        this._ignoreClockOffsetChanges = false;
 
         // Start tracking timings
         this._updateSettings();
@@ -231,6 +232,9 @@ export const TimeLimitsManager = GObject.registerClass({
         this._clockOffsetSecs = this._getClockOffset();
         try {
             this._timeChangeId = this._clock.timeChangeNotify(() => {
+                if (this._ignoreClockOffsetChanges)
+                    return GLib.SOURCE_CONTINUE;
+
                 const newClockOffsetSecs = this._getClockOffset();
                 const oldClockOffsetSecs = this._clockOffsetSecs;
 
@@ -348,9 +352,14 @@ export const TimeLimitsManager = GObject.registerClass({
     }
 
     async _onPrepareForSleep(preparingForSleep) {
-        // Just come back from sleep, so take another inhibitor.
-        if (!preparingForSleep)
+        // Just come back from sleep, so take another inhibitor. Also update
+        // the clock offset to account for the monotonic clock not advancing
+        // during sleep.
+        if (!preparingForSleep) {
             this._ensureInhibitor();
+            this._clockOffsetSecs = this._getClockOffset();
+            this._ignoreClockOffsetChanges = false;
+        }
 
         try {
             await this._updateUserState(true);
@@ -358,9 +367,14 @@ export const TimeLimitsManager = GObject.registerClass({
             console.warn(`Failed to update user state: ${e.message}`);
         }
 
-        // Release the inhibitor if we’re preparing to sleep.
-        if (preparingForSleep)
+        // Release the inhibitor if we’re preparing to sleep. Also avoid
+        // adjusting the time due to offset changes caused by the monotonic
+        // clock not advancing during sleep until we have updated the current
+        // offset to account for this.
+        if (preparingForSleep) {
+            this._ignoreClockOffsetChanges = true;
             this._releaseInhibitor();
+        }
     }
 
     /** Shut down the state machine and write out the state file. */
@@ -441,7 +455,8 @@ export const TimeLimitsManager = GObject.registerClass({
         }
     }
 
-    _addTransition(oldState, newState, wallTimeSecs, recalculateState = true) {
+    _addTransition(oldState, newState, wallTimeSecs,
+        {recalculateState = true, debugLog = true} = {}) {
         this._stateTransitions.push({
             oldState,
             newState,
@@ -450,8 +465,10 @@ export const TimeLimitsManager = GObject.registerClass({
 
         this._userState = newState;
 
-        console.debug('TimeLimitsManager: User state changed from ' +
-            `${userStateToString(oldState)} to ${userStateToString(newState)} at ${wallTimeSecs}s`);
+        if (debugLog) {
+            console.debug('TimeLimitsManager: User state changed from ' +
+                `${userStateToString(oldState)} to ${userStateToString(newState)} at ${wallTimeSecs}s`);
+        }
 
         // This potentially changed the limit time and timeout calculations.
         if (recalculateState && this._state !== TimeLimitsState.DISABLED) {
@@ -528,10 +545,14 @@ export const TimeLimitsManager = GObject.registerClass({
             this._addTransition(
                 entry['oldState'],
                 entry['newState'],
-                entry['wallTimeSecs'],
-                i === history.length - 1);
+                entry['wallTimeSecs'], {
+                    recalculateState: i === history.length - 1,
+                    debugLog: false,
+                });
             previousWallTimeSecs = entry['wallTimeSecs'];
         }
+
+        console.debug(`TimeLimitsManager: Loaded ${history.length} transitions from history`);
 
         this.thaw_notify();
     }
@@ -615,8 +636,9 @@ export const TimeLimitsManager = GObject.registerClass({
      * Get the Unix timestamp (in real seconds since the epoch) for the start of
      * today and the start of tomorrow.
      *
-     * To avoid problems due to 24:00-01:00 not existing on leap days,
-     * arbitrarily say that the day starts at 03:00.
+     * To avoid problems due to 01:00-02:00 not existing (or existing twice) on
+     * daylight savings time transition days, arbitrarily say that the day
+     * starts at 03:00.
      *
      * @param {number} nowSecs ‘Current’ time to calculate from.
      * @returns {number}

@@ -11,7 +11,6 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
-import Mtk from 'gi://Mtk';
 import Polkit from 'gi://Polkit';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -31,6 +30,8 @@ Gio._promisify(Gio.DBusProxy.prototype, 'call_with_unix_fd_list');
 Gio._promisify(Gio.File.prototype, 'query_info_async');
 Gio._promisify(Polkit.Permission, 'new');
 Gio._promisify(Shell.App.prototype, 'activate_action');
+Gio._promisify(Meta.Backend.prototype, 'set_keymap_async');
+Gio._promisify(Meta.Backend.prototype, 'set_keymap_layout_group_async');
 
 // We can't import shell JS modules yet, because they may have
 // variable initializations, etc, that depend on this file's
@@ -318,20 +319,6 @@ Clutter.Actor.prototype[Symbol.iterator] = function* () {
 Clutter.Actor.prototype.toString = function () {
     return St.describe_actor(this);
 };
-// Deprecation warning for former JS classes turned into an actor subclass
-Object.defineProperty(Clutter.Actor.prototype, 'actor', {
-    get() {
-        let klass = this.constructor.name;
-        let {stack} = new Error();
-        log(`Usage of object.actor is deprecated for ${klass}\n${stack}`);
-        return this;
-    },
-});
-
-Meta.Rectangle = function (params = {}) {
-    console.warn('Meta.Rectangle is deprecated, use Mtk.Rectangle instead');
-    return new Mtk.Rectangle(params);
-};
 
 Gio.File.prototype.touch_async = function (callback) {
     Shell.util_touch_file_async(this, callback);
@@ -348,7 +335,7 @@ Object.prototype.toString = function () {
             return base.replace(/\]$/, ` delegate for ${this.actor.toString().substring(1)}`);
         else
             return base;
-    } catch (e) {
+    } catch {
         return base;
     }
 };

@@ -32,6 +32,24 @@ const ScreenshotIface = loadInterfaceXML('org.gnome.Shell.Screenshot');
 const ScreencastIface = loadInterfaceXML('org.gnome.Shell.Screencast');
 const ScreencastProxy = Gio.DBusProxy.makeProxyWrapper(ScreencastIface);
 
+let screenshotNotificationSource = null;
+function getScreenshotNotificationSource() {
+    if (!screenshotNotificationSource) {
+        screenshotNotificationSource = new MessageTray.Source({
+            // Translators: notification source name for screenshots and recordings.
+            title: _('Screen Capture'),
+            iconName: 'screenshooter-symbolic',
+        });
+
+        screenshotNotificationSource.connect('destroy', () => {
+            screenshotNotificationSource = null;
+        });
+        Main.messageTray.add(screenshotNotificationSource);
+    }
+
+    return screenshotNotificationSource;
+}
+
 const IconLabelButton = GObject.registerClass(
 class IconLabelButton extends St.Button {
     _init(iconName, label, params) {
@@ -1350,7 +1368,7 @@ export const ScreenshotUI = GObject.registerClass({
             visible: false,
         }));
         this._captureButton.connect('clicked',
-            this._onCaptureButtonClicked.bind(this));
+            () => this._onCaptureButtonClicked().catch(logError));
         this._bottomRowContainer.add_child(this._captureButton);
 
         this._showPointerButtonContainer = new St.BoxLayout({
@@ -1872,9 +1890,13 @@ export const ScreenshotUI = GObject.registerClass({
         return [x, y, w, h];
     }
 
-    _onCaptureButtonClicked() {
+    async _onCaptureButtonClicked() {
         if (this._shotButton.checked) {
-            this._saveScreenshot().catch(logError);
+            try {
+                await this._saveScreenshot();
+            } catch (e) {
+                logError(e);
+            }
             this.close();
         } else {
             // Screencast closes the UI on its own.
@@ -2078,16 +2100,12 @@ export const ScreenshotUI = GObject.registerClass({
     }
 
     _showNotification(title) {
-        const source = new MessageTray.Source({
-            // Translators: notification source name.
-            title: _('Screenshot'),
-            iconName: 'screencast-recorded-symbolic',
-        });
+        const source = getScreenshotNotificationSource();
         const notification = new MessageTray.Notification({
             source,
             title,
             // Translators: notification body when a screencast was recorded.
-            body: this._screencastPath ? _('Click here to view the video.') : '',
+            body: this._screencastPath ? _('Click here to view the video') : '',
             isTransient: true,
         });
 
@@ -2120,7 +2138,6 @@ export const ScreenshotUI = GObject.registerClass({
             Main.panel.closeCalendar();
         }
 
-        Main.messageTray.add(source);
         source.addNotification(notification);
     }
 
@@ -2142,7 +2159,7 @@ export const ScreenshotUI = GObject.registerClass({
             symbol === Clutter.KEY_KP_Enter || symbol === Clutter.KEY_ISO_Enter ||
             ((event.get_state() & Clutter.ModifierType.CONTROL_MASK) &&
              (symbol === Clutter.KEY_c || symbol === Clutter.KEY_C))) {
-            this._onCaptureButtonClicked();
+            this._onCaptureButtonClicked().catch(logError);
             return Clutter.EVENT_STOP;
         }
 
@@ -2325,17 +2342,13 @@ function _storeScreenshot(bytes, pixbuf) {
     );
 
     // Show a notification.
-    const source = new MessageTray.Source({
-        // Translators: notification source name.
-        title: _('Screenshot'),
-        iconName: 'screenshot-recorded-symbolic',
-    });
+    const source = getScreenshotNotificationSource();
     const notification = new MessageTray.Notification({
         source,
         // Translators: notification title.
         title: _('Screenshot captured'),
         // Translators: notification body when a screenshot was captured.
-        body: _('You can paste the image from the clipboard.'),
+        body: _('You can paste the image from the clipboard'),
         datetime: time,
         gicon: content,
         isTransient: true,
@@ -2368,7 +2381,6 @@ function _storeScreenshot(bytes, pixbuf) {
         });
     }
 
-    Main.messageTray.add(source);
     source.addNotification(notification);
 
     return file;
@@ -2434,9 +2446,7 @@ export class ScreenshotService {
         this._screenShooter = new Map();
         this._senderChecker = new DBusSenderChecker([
             'org.gnome.SettingsDaemon.MediaKeys',
-            'org.freedesktop.impl.portal.desktop.gtk',
             'org.freedesktop.impl.portal.desktop.gnome',
-            'org.gnome.Screenshot',
         ]);
 
         this._lockdownSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.lockdown'});
@@ -2621,7 +2631,7 @@ export class ScreenshotService {
                 screenshot.screenshot_area(x, y, width, height, stream),
             ]);
             this._onScreenshotComplete(stream, file, invocation);
-        } catch (e) {
+        } catch {
             invocation.return_value(new GLib.Variant('(bs)', [false, '']));
         } finally {
             this._removeShooterForSender(invocation.get_sender());
@@ -2644,7 +2654,7 @@ export class ScreenshotService {
                 screenshot.screenshot_window(includeFrame, includeCursor, stream),
             ]);
             this._onScreenshotComplete(stream, file, invocation);
-        } catch (e) {
+        } catch {
             invocation.return_value(new GLib.Variant('(bs)', [false, '']));
         } finally {
             this._removeShooterForSender(invocation.get_sender());
@@ -2667,7 +2677,7 @@ export class ScreenshotService {
                 screenshot.screenshot(includeCursor, stream),
             ]);
             this._onScreenshotComplete(stream, file, invocation);
-        } catch (e) {
+        } catch {
             invocation.return_value(new GLib.Variant('(bs)', [false, '']));
         } finally {
             this._removeShooterForSender(invocation.get_sender());
@@ -2696,7 +2706,7 @@ export class ScreenshotService {
 
         try {
             Main.screenshotUI.open(UIMode.SCREENSHOT_ONLY);
-        } catch (e) {
+        } catch {
             Main.screenshotUI.disconnectObject(invocation);
             invocation.return_value(new GLib.Variant('(bs)', [false, '']));
         }
@@ -2717,7 +2727,7 @@ export class ScreenshotService {
                 areaRectangle.x, areaRectangle.y,
                 areaRectangle.width, areaRectangle.height);
             invocation.return_value(GLib.Variant.new('(iiii)', retRectangle));
-        } catch (e) {
+        } catch {
             invocation.return_error_literal(
                 Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED,
                 'Operation was cancelled');
@@ -2763,7 +2773,7 @@ export class ScreenshotService {
                 ]),
             }]);
             invocation.return_value(retval);
-        } catch (e) {
+        } catch {
             invocation.return_error_literal(
                 Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED,
                 'Operation was cancelled');
@@ -3026,13 +3036,15 @@ class PickPixel extends St.Widget {
         });
         this.add_constraint(constraint);
 
-        const action = new Clutter.ClickAction();
-        action.connect('clicked', async () => {
-            await this._pickColor(...action.get_coords());
+        const clickGesture = new Clutter.ClickGesture();
+        clickGesture.connect('recognize', async () => {
+            const {x, y} = clickGesture.get_coords_abs();
+
+            await this._pickColor(x, y);
             this._result = this._color;
             this._grabHelper.ungrab();
         });
-        this.add_action(action);
+        this.add_action(clickGesture);
 
         this._recolorEffect = new RecolorEffect({
             chroma: new Cogl.Color({

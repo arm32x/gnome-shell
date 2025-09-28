@@ -55,9 +55,10 @@
   </description>
 
   <releases>
-    <release version="48.0" date="2025-03-16">
+    <release version="49.0" date="2025-09-14">
       <description>
-        <p>Allow closing window with shortcut</p>
+        <p>Improve keyboard navigation</p>
+        <p>Use new libadwaita shortcuts dialog</p>
       </description>
     </release>
   </releases>

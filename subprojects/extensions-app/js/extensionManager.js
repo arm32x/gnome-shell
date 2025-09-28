@@ -3,7 +3,7 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 
 import {
-    ExtensionState, ExtensionType, deserializeExtension
+    ExtensionState, ExtensionType, deserializeExtension,
 }  from './misc/extensionUtils.js';
 
 const GnomeShellIface = loadInterfaceXML('org.gnome.Shell.Extensions');
@@ -18,7 +18,7 @@ function loadInterfaceXML(iface) {
     try {
         let [ok_, bytes] = f.load_contents(null);
         return new TextDecoder().decode(bytes);
-    } catch (e) {
+    } catch {
         console.error(`Failed to load D-Bus interface ${iface}`);
     }
 

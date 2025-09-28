@@ -1,7 +1,6 @@
 data_builddir = meson.current_build_dir()
 
 desktop_files = [
-  'org.gnome.Shell.desktop',
   'org.gnome.Shell.Extensions.desktop',
 ]
 service_files = []
@@ -11,19 +10,9 @@ if have_portal_helper
   service_files += 'org.gnome.Shell.PortalHelper.service'
 endif
 
-desktopconf = configuration_data()
-# We substitute in bindir so it works as an autostart
-# file when built in a non-system prefix
-desktopconf.set('bindir', bindir)
-desktopconf.set('systemd_hidden', have_systemd ? 'true' : 'false')
-
 foreach desktop_file : desktop_files
   i18n.merge_file(
-    input: configure_file(
-      input: desktop_file + '.in.in',
-      output: desktop_file + '.in',
-      configuration: desktopconf
-    ),
+    input: desktop_file + '.in',
     output: desktop_file,
     po_dir: po_dir,
     install: true,
@@ -70,11 +59,12 @@ data_resources = [
   {'name': 'osk-layouts'},
   {'name': 'theme', 'deps': theme_deps}
 ]
+data_resources_targets = []
 foreach resource : data_resources
   name = resource.get('name')
   deps = resource.get('deps', [])
 
-  gnome.compile_resources(
+  data_resources_targets += gnome.compile_resources(
     'gnome-shell-' + name,
     'gnome-shell-@0@.gresource.xml'.format(name),
     source_dir: name,
@@ -161,8 +151,8 @@ if have_systemd
 endif
 
 # for unit tests - gnome.compile_schemas() only looks in srcdir
-custom_target('compile-schemas',
+compiled_schemas = custom_target('compile-schemas',
   input: schema,
   output: 'gschemas.compiled',
   command: [find_program('glib-compile-schemas'), '--strict', data_builddir],
-  build_by_default: true)
+)

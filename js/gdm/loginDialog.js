@@ -40,11 +40,15 @@ import * as ModalDialog from '../ui/modalDialog.js';
 import * as PopupMenu from '../ui/popupMenu.js';
 import * as Realmd from './realmd.js';
 import * as UserWidget from '../ui/userWidget.js';
+import {QuickSettingsMenu} from '../ui/quickSettings.js';
+import * as A11y from '../ui/status/accessibility.js';
 
 const _FADE_ANIMATION_TIME = 250;
 const _SCROLL_ANIMATION_TIME = 500;
 const _TIMED_LOGIN_IDLE_THRESHOLD = 5.0;
 const _CONFLICTING_SESSION_DIALOG_TIMEOUT = 60;
+
+const N_A11Y_MENU_COLUMNS = 2;
 
 Gio._promisify(Gio.File.prototype, 'load_contents_async');
 
@@ -182,7 +186,7 @@ const UserList = GObject.registerClass({
         });
 
         this.child = this._box;
-        this._items = {};
+        this._items = new Map();
     }
 
     vfunc_key_focus_in() {
@@ -191,7 +195,7 @@ const UserList = GObject.registerClass({
     }
 
     _moveFocusToItems() {
-        let hasItems = Object.keys(this._items).length > 0;
+        const hasItems = this._items.size > 0;
 
         if (!hasItems)
             return;
@@ -218,11 +222,6 @@ const UserList = GObject.registerClass({
             this._box.add_style_pseudo_class('expanded');
         else
             this._box.remove_style_pseudo_class('expanded');
-
-        for (let userName in this._items) {
-            let item = this._items[userName];
-            item.sync_hover();
-        }
     }
 
     scrollToItem(item) {
@@ -248,7 +247,7 @@ const UserList = GObject.registerClass({
     }
 
     getItemFromUserName(userName) {
-        let item = this._items[userName];
+        const item = this._items.get(userName);
 
         if (!item)
             return null;
@@ -257,7 +256,7 @@ const UserList = GObject.registerClass({
     }
 
     containsUser(user) {
-        return this._items[user.get_user_name()] != null;
+        return this._items.has(user.get_user_name());
     }
 
     addUser(user) {
@@ -280,7 +279,7 @@ const UserList = GObject.registerClass({
         let item = new UserListItem(user);
         this._box.add_child(item);
 
-        this._items[userName] = item;
+        this._items.set(userName, item);
 
         item.connect('activate', this._onItemActivated.bind(this));
 
@@ -301,17 +300,17 @@ const UserList = GObject.registerClass({
         if (!userName)
             return;
 
-        let item = this._items[userName];
+        const item = this._items.get(userName);
 
         if (!item)
             return;
 
         item.destroy();
-        delete this._items[userName];
+        this._items.delete(userName);
     }
 
     numItems() {
-        return Object.keys(this._items).length;
+        return this._items.size;
     }
 });
 
@@ -351,7 +350,7 @@ const SessionMenuButton = GObject.registerClass({
 
         this._button.connect('clicked', () => this._menu.toggle());
 
-        this._items = {};
+        this._items = new Map();
         this._activeSessionId = null;
         this._populate();
     }
@@ -364,12 +363,11 @@ const SessionMenuButton = GObject.registerClass({
     }
 
     _updateOrnament() {
-        let itemIds = Object.keys(this._items);
-        for (let i = 0; i < itemIds.length; i++) {
-            if (itemIds[i] === this._activeSessionId)
-                this._items[itemIds[i]].setOrnament(PopupMenu.Ornament.DOT);
+        for (const itemId of this._items.keys()) {
+            if (itemId === this._activeSessionId)
+                this._items.get(itemId).setOrnament(PopupMenu.Ornament.DOT);
             else
-                this._items[itemIds[i]].setOrnament(PopupMenu.Ornament.NO_DOT);
+                this._items.get(itemId).setOrnament(PopupMenu.Ornament.NO_DOT);
         }
     }
 
@@ -400,13 +398,58 @@ const SessionMenuButton = GObject.registerClass({
             let id = ids[i];
             let item = new PopupMenu.PopupMenuItem(sessionName);
             this._menu.addMenuItem(item);
-            this._items[id] = item;
+            this._items.set(id, item);
 
             item.connect('activate', () => {
                 this.setActiveSession(id);
                 this.emit('session-activated', this._activeSessionId);
             });
         }
+    }
+});
+
+const A11yMenuButton = GObject.registerClass(
+class A11yMenuButton extends St.Button {
+    constructor() {
+        super({
+            style_class: 'login-dialog-button a11y-button',
+            icon_name: 'org.gnome.Settings-accessibility-symbolic',
+            accessible_name: _('Accessibility'),
+            accessible_role: Atk.Role.MENU,
+            can_focus: true,
+        });
+
+        this._menu = new QuickSettingsMenu(this, N_A11Y_MENU_COLUMNS);
+
+        this._menu.addItem(new A11y.HighContrastToggle());
+        this._menu.addItem(new A11y.MagnifierToggle());
+        this._menu.addItem(new A11y.LargeTextToggle());
+        this._menu.addItem(new A11y.ScreenReaderToggle());
+        this._menu.addItem(new A11y.ScreenKeyboardToggle());
+        this._menu.addItem(new A11y.VisualBellToggle());
+        this._menu.addItem(new A11y.StickyKeysToggle());
+        this._menu.addItem(new A11y.SlowKeysToggle());
+        this._menu.addItem(new A11y.BounceKeysToggle());
+        this._menu.addItem(new A11y.MouseKeysToggle());
+
+        Main.uiGroup.add_child(this._menu.actor);
+        this._menu.actor.hide();
+
+        this._menu.connect('open-state-changed', (menu, isOpen) => {
+            if (isOpen)
+                this.add_style_pseudo_class('active');
+            else
+                this.remove_style_pseudo_class('active');
+        });
+        this._menu.actor.connect('key-press-event',
+            (o, ev) => global.focus_manager.navigate_from_event(ev));
+
+        this._manager = new PopupMenu.PopupMenuManager(this,
+            {actionMode: Shell.ActionMode.NONE});
+        this._manager.addMenu(this._menu);
+
+        this.connect('clicked', () => this._menu.toggle());
+        this.connect('destroy', () => this._menu.destroy());
     }
 });
 
@@ -501,7 +544,7 @@ export const LoginDialog = GObject.registerClass({
 
         try {
             this._gdmClient.set_enabled_extensions([Gdm.UserVerifierChoiceList.interface_info().name]);
-        } catch (e) {
+        } catch {
         }
 
         this._settings = new Gio.Settings({schema_id: GdmUtil.LOGIN_SCREEN_SCHEMA});
@@ -592,6 +635,11 @@ export const LoginDialog = GObject.registerClass({
         this._updateBannerMessageFile();
         this._updateBanner().catch(logError);
 
+        this._bottomButtonGroup = new St.BoxLayout({
+            style_class: 'login-dialog-bottom-button-group',
+        });
+        this.add_child(this._bottomButtonGroup);
+
         this._sessionMenuButton = new SessionMenuButton();
         this._sessionMenuButton.connect('session-activated',
             (list, sessionId) => {
@@ -599,7 +647,10 @@ export const LoginDialog = GObject.registerClass({
             });
         this._sessionMenuButton.opacity = 0;
         this._sessionMenuButton.show();
-        this.add_child(this._sessionMenuButton);
+        this._bottomButtonGroup.add_child(this._sessionMenuButton);
+
+        this._a11yMenuButton = new A11yMenuButton();
+        this._bottomButtonGroup.add_child(this._a11yMenuButton);
 
         this._logoBin = new St.Widget({
             style_class: 'login-dialog-logo-bin',
@@ -660,17 +711,17 @@ export const LoginDialog = GObject.registerClass({
         return actorBox;
     }
 
-    _getSessionMenuButtonAllocation(dialogBox) {
+    _getBottomButtonGroupAllocation(dialogBox) {
         let actorBox = new Clutter.ActorBox();
 
-        let [, , natWidth, natHeight] = this._sessionMenuButton.get_preferred_size();
+        const [, , natWidth, natHeight] = this._bottomButtonGroup.get_preferred_size();
 
         if (this.get_text_direction() === Clutter.TextDirection.RTL)
-            actorBox.x1 = dialogBox.x1 + natWidth;
+            actorBox.x1 = dialogBox.x1;
         else
-            actorBox.x1 = dialogBox.x2 - (natWidth * 2);
+            actorBox.x1 = dialogBox.x2 - natWidth;
 
-        actorBox.y1 = dialogBox.y2 - (natHeight * 2);
+        actorBox.y1 = dialogBox.y2 - natHeight;
         actorBox.x2 = actorBox.x1 + natWidth;
         actorBox.y2 = actorBox.y1 + natHeight;
 
@@ -733,9 +784,9 @@ export const LoginDialog = GObject.registerClass({
             logoHeight = logoAllocation.y2 - logoAllocation.y1;
         }
 
-        let sessionMenuButtonAllocation = null;
-        if (this._sessionMenuButton.visible)
-            sessionMenuButtonAllocation = this._getSessionMenuButtonAllocation(dialogBox);
+        let bottomButtonGroupAllocation = null;
+        if (this._bottomButtonGroup.visible)
+            bottomButtonGroupAllocation = this._getBottomButtonGroupAllocation(dialogBox);
 
         // Then figure out if we're overly constrained and need to
         // try a different layout, or if we have what extra space we
@@ -836,8 +887,8 @@ export const LoginDialog = GObject.registerClass({
         if (logoAllocation)
             this._logoBin.allocate(logoAllocation);
 
-        if (sessionMenuButtonAllocation)
-            this._sessionMenuButton.allocate(sessionMenuButtonAllocation);
+        if (bottomButtonGroupAllocation)
+            this._bottomButtonGroup.allocate(bottomButtonGroupAllocation);
     }
 
     _ensureUserListLoaded() {
@@ -990,10 +1041,10 @@ export const LoginDialog = GObject.registerClass({
         this._showPrompt();
     }
 
-    _resetGreeterProxy() {
+    _ensureGreeterProxy() {
         if (GLib.getenv('GDM_GREETER_TEST') !== '1') {
             if (this._greeter)
-                this._greeter.run_dispose();
+                return;
 
             this._greeter = this._gdmClient.get_greeter_sync(null);
 
@@ -1005,7 +1056,7 @@ export const LoginDialog = GObject.registerClass({
     }
 
     _onReset(authPrompt, beginRequest) {
-        this._resetGreeterProxy();
+        this._ensureGreeterProxy();
         this._sessionMenuButton.updateSensitivity(true);
 
         const previousUser = this._user;
@@ -1035,8 +1086,12 @@ export const LoginDialog = GObject.registerClass({
     }
 
     _shouldShowSessionMenuButton() {
-        if (this._authPrompt.verificationStatus !== AuthPrompt.AuthPromptStatus.VERIFYING &&
-            this._authPrompt.verificationStatus !== AuthPrompt.AuthPromptStatus.VERIFICATION_FAILED)
+        const visibleStatuses = [
+            AuthPrompt.AuthPromptStatus.VERIFYING,
+            AuthPrompt.AuthPromptStatus.VERIFICATION_FAILED,
+            AuthPrompt.AuthPromptStatus.VERIFICATION_IN_PROGRESS,
+        ];
+        if (!visibleStatuses.includes(this._authPrompt.verificationStatus))
             return false;
 
         if (this._user && this._user.is_loaded && this._user.is_logged_in())

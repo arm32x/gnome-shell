@@ -14,8 +14,10 @@ import {DBusSenderChecker} from '../misc/util.js';
 import {ControlsState} from './overviewControls.js';
 
 const GnomeShellIface = loadInterfaceXML('org.gnome.Shell');
+const GnomeShellExtensionsIface = loadInterfaceXML('org.gnome.Shell.Extensions');
 const ScreenSaverIface = loadInterfaceXML('org.gnome.ScreenSaver');
 const ScreenTimeIface = loadInterfaceXML('org.gnome.Shell.ScreenTime');
+const BrightnessIface = loadInterfaceXML('org.gnome.Shell.Brightness');
 
 export class GnomeShell {
     constructor() {
@@ -135,17 +137,18 @@ export class GnomeShell {
             icon: serializedIcon,
         } = params;
 
-        let monitorIndex = -1;
-        if (connector) {
-            const monitorManager = global.backend.get_monitor_manager();
-            monitorIndex = monitorManager.get_monitor_for_connector(connector);
-        }
-
         let icon = null;
         if (serializedIcon)
             icon = Gio.Icon.new_for_string(serializedIcon);
 
-        Main.osdWindowManager.show(monitorIndex, icon, label, level, maxLevel);
+        if (connector) {
+            const monitorManager = global.backend.get_monitor_manager();
+            const monitorIndex =
+                monitorManager.get_monitor_for_connector(connector);
+            Main.osdWindowManager.showOne(monitorIndex, icon, label, level, maxLevel);
+        } else {
+            Main.osdWindowManager.showAll(icon, label, level, maxLevel);
+        }
         invocation.return_value(null);
     }
 
@@ -409,8 +412,6 @@ export class GnomeShell {
     }
 }
 
-const GnomeShellExtensionsIface = loadInterfaceXML('org.gnome.Shell.Extensions');
-
 class GnomeShellExtensions {
     constructor() {
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(GnomeShellExtensionsIface, this);
@@ -583,5 +584,42 @@ export class ScreenTimeDBus {
 
     get LastBreakEndTime() {
         return this._manager.lastBreakEndTime;
+    }
+}
+
+export class BrightnessDBus {
+    constructor(brightnessManager) {
+        this._manager = brightnessManager;
+
+        this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(BrightnessIface, this);
+        this._dbusImpl.export(Gio.DBus.session, '/org/gnome/Shell/Brightness');
+
+        Gio.DBus.session.own_name('org.gnome.Shell.Brightness',
+            Gio.BusNameOwnerFlags.NONE, null, null);
+
+        this._manager.connectObject('changed', this._sync.bind(this), this);
+        this._sync();
+    }
+
+    _sync() {
+        const hasBrightnessControl = !!this._manager.globalScale;
+        if (hasBrightnessControl === this._hasBrightnessControl)
+            return;
+
+        this._hasBrightnessControl = hasBrightnessControl;
+        this._dbusImpl.emit_property_changed('HasBrightnessControl',
+            new GLib.Variant('b', this._hasBrightnessControl));
+    }
+
+    SetDimming(enable) {
+        this._manager.dimming = enable;
+    }
+
+    SetAutoBrightnessTarget(target) {
+        this._manager.autoBrightnessTarget = target;
+    }
+
+    get HasBrightnessControl() {
+        return this._hasBrightnessControl;
     }
 }

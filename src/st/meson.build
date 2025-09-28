@@ -6,6 +6,7 @@ st_headers = [
   'st-box-layout.h',
   'st-button.h',
   'st-clipboard.h',
+  'st-dnd-start-gesture.h',
   'st-drawing-area.h',
   'st-entry.h',
   'st-focus-manager.h',
@@ -119,6 +120,7 @@ st_sources = [
   'st-box-layout.c',
   'st-button.c',
   'st-clipboard.c',
+  'st-dnd-start-gesture.c',
   'st-drawing-area.c',
   'st-entry.c',
   'st-focus-manager.c',
@@ -221,7 +223,9 @@ if get_option('tests') and have_x11_client
     link_with: libst
   )
 
-  test('CSS styling support', test_theme,
+  test('css-styling', test_theme,
+    suite: 'st',
+    depends: compiled_schemas,
     workdir: meson.current_source_dir(),
   )
 endif

@@ -1,5 +1,5 @@
 project('gnome-extensions-app',
-  version: '48.0',
+  version: '49.0',
   meson_version: '>= 0.58.0',
   license: 'GPL-2.0-or-later',
 )
@@ -51,16 +51,16 @@ gjs = find_program('gjs')
 appstreamcli = find_program('appstreamcli', required: false)
 desktop_file_validate = find_program('desktop-file-validate', required: false)
 
+libshew = dependency('libshew',
+  default_options: [
+    'package_name=@0@'.format(meson.project_name()),
+  ]
+)
+
 subdir('data')
 subdir('js')
 
 if not meson.is_subproject()
-  subproject('shew',
-    default_options: [
-      'package_name=@0@'.format(meson.project_name()),
-    ]
-  )
-
   subdir('po')
 
   gnome.post_install(

@@ -35,6 +35,7 @@ struct _NaXembedClass
 
   void (* plug_added) (NaXembed *xembed);
   void (* plug_removed) (NaXembed *xembed);
+  void (* reconfigured) (NaXembed *xembed);
 };
 
 MetaX11Display * na_xembed_get_x11_display (NaXembed *xembed);
@@ -57,6 +58,10 @@ void na_xembed_get_root_position (NaXembed *xembed,
 void na_xembed_get_size (NaXembed *xembed,
 			 int      *width,
 			 int      *height);
+
+void na_xembed_set_available_size (NaXembed *xembed,
+                                   int       width,
+                                   int       height);
 
 void na_xembed_set_background_color (NaXembed        *xembed,
                                      const CoglColor *color);

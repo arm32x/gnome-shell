@@ -3,17 +3,18 @@
 data/50-gnome-shell-launchers.xml
 data/50-gnome-shell-screenshots.xml
 data/50-gnome-shell-system.xml
-data/org.gnome.Shell.desktop.in.in
 data/org.gnome.shell.gschema.xml.in
-data/org.gnome.Shell.Extensions.desktop.in.in
-data/org.gnome.Shell.PortalHelper.desktop.in.in
+data/org.gnome.Shell.Extensions.desktop.in
+data/org.gnome.Shell.PortalHelper.desktop.in
 data/X-GNOME-Shell-System.directory.desktop.in
 data/X-GNOME-Shell-Utilities.directory.desktop.in
+js/dbusServices/extensions/extensionPrefsDialog.js
 js/dbusServices/extensions/ui/extension-error-page.ui
 js/gdm/authPrompt.js
 js/gdm/loginDialog.js
 js/gdm/util.js
 js/misc/breakManager.js
+js/misc/brightnessManager.js
 js/misc/systemActions.js
 js/misc/timeLimitsManager.js
 js/misc/util.js
@@ -68,6 +69,7 @@ js/ui/status/backlight.js
 js/ui/status/bluetooth.js
 js/ui/status/brightness.js
 js/ui/status/darkMode.js
+js/ui/status/doNotDisturb.js
 js/ui/status/dwellClick.js
 js/ui/status/keyboard.js
 js/ui/status/location.js
@@ -100,7 +102,7 @@ subprojects/extensions-app/js/extensionRow.js
 subprojects/extensions-app/js/extensionsWindow.js
 subprojects/extensions-app/data/ui/extension-row.ui
 subprojects/extensions-app/data/ui/extensions-window.ui
-subprojects/extensions-app/data/ui/help-overlay.ui
+subprojects/extensions-app/data/ui/shortcuts-dialog.ui
 subprojects/extensions-tool/src/command-create.c
 subprojects/extensions-tool/src/command-disable.c
 subprojects/extensions-tool/src/command-enable.c
@@ -111,6 +113,7 @@ subprojects/extensions-tool/src/command-pack.c
 subprojects/extensions-tool/src/command-prefs.c
 subprojects/extensions-tool/src/command-reset.c
 subprojects/extensions-tool/src/command-uninstall.c
+subprojects/extensions-tool/src/command-upload.c
 subprojects/extensions-tool/src/main.c
 subprojects/extensions-tool/src/templates/00-plain.desktop.in
 subprojects/extensions-tool/src/templates/indicator.desktop.in

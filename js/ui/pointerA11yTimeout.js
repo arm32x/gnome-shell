@@ -112,12 +112,13 @@ export class PointerA11yTimeout {
     constructor() {
         const seat = global.stage.context.get_backend().get_default_seat();
 
-        seat.connect('ptr-a11y-timeout-started', (o, device, type, timeout) => {
+        seat.connect('ptr-a11y-timeout-started', (o, type, timeout) => {
             let [x, y] = global.get_pointer();
 
             this._pieTimer = new PieTimer();
             Main.uiGroup.add_child(this._pieTimer);
             Main.uiGroup.set_child_above_sibling(this._pieTimer, null);
+            this._pieTimer.connect('destroy', () => (this._pieTimer = null));
 
             this._pieTimer.start(x, y, timeout);
 
@@ -125,9 +126,9 @@ export class PointerA11yTimeout {
                 global.display.set_cursor(Meta.Cursor.CROSSHAIR);
         });
 
-        seat.connect('ptr-a11y-timeout-stopped', (o, device, type, clicked) => {
+        seat.connect('ptr-a11y-timeout-stopped', (o, type, clicked) => {
             if (!clicked)
-                this._pieTimer.destroy();
+                this._pieTimer?.destroy();
 
             if (type === Clutter.PointerA11yTimeoutType.GESTURE)
                 global.display.set_cursor(Meta.Cursor.DEFAULT);

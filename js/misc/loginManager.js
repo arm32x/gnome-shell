@@ -48,7 +48,7 @@ export function canLock() {
 
         let version = result.deepUnpack()[0].deepUnpack();
         return haveSystemd() && versionCompare('3.5.91', version);
-    } catch (e) {
+    } catch {
         return false;
     }
 }
@@ -92,6 +92,8 @@ export function getLoginManager() {
 class LoginManagerSystemd extends Signals.EventEmitter {
     constructor() {
         super();
+
+        this._preparingForSleep = false;
 
         this._proxy = new SystemdLoginManager(Gio.DBus.system,
             'org.freedesktop.login1',
@@ -170,7 +172,7 @@ class LoginManagerSystemd extends Signals.EventEmitter {
             const [result] = await this._proxy.CanSuspendAsync();
             needsAuth = result === 'challenge';
             canSuspend = needsAuth || result === 'yes';
-        } catch (error) {
+        } catch {
             canSuspend = false;
             needsAuth = false;
         }
@@ -184,7 +186,7 @@ class LoginManagerSystemd extends Signals.EventEmitter {
             const [result] = await this._proxy.CanRebootToBootLoaderMenuAsync();
             needsAuth = result === 'challenge';
             canRebootToBootLoaderMenu = needsAuth || result === 'yes';
-        } catch (error) {
+        } catch {
             canRebootToBootLoaderMenu = false;
             needsAuth = false;
         }
@@ -200,7 +202,7 @@ class LoginManagerSystemd extends Signals.EventEmitter {
         try {
             const [sessions] = await this._proxy.ListSessionsAsync();
             return sessions;
-        } catch (e) {
+        } catch {
             return [];
         }
     }
@@ -224,6 +226,7 @@ class LoginManagerSystemd extends Signals.EventEmitter {
     }
 
     _prepareForSleep(proxy, sender, [aboutToSuspend]) {
+        this._preparingForSleep = aboutToSuspend;
         this.emit('prepare-for-sleep', aboutToSuspend);
     }
 
@@ -235,7 +238,7 @@ class LoginManagerSystemd extends Signals.EventEmitter {
      * @type {boolean}
      */
     get preparingForSleep() {
-        return this._proxy.PreparingForSleep;
+        return this._preparingForSleep;
     }
 
     _sessionRemoved(proxy, sender, [sessionId]) {

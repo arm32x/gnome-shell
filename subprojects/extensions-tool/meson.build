@@ -1,5 +1,5 @@
 project('gnome-extensions-tool', 'c',
-  version: '48.0',
+    version: '49.0',
   meson_version: '>= 0.58.0',
   license: 'GPL-2.0-or-later',
 )
@@ -31,6 +31,7 @@ gio_dep = dependency('gio-2.0', version: gio_req)
 gio_unix_dep = dependency('gio-unix-2.0', version: gio_req)
 autoar_dep = dependency('gnome-autoar-0')
 json_dep = dependency('json-glib-1.0')
+soup_dep = dependency('libsoup-3.0')
 
 cc = meson.get_compiler('c')
 

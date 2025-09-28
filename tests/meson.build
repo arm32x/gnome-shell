@@ -13,6 +13,15 @@ gvc_typelib_path = fs.parent(libgvc.get_variable('libgvc_gir')[1].full_path())
 shell_typelib_path = fs.parent(libshell_gir[1].full_path())
 st_typelib_path = fs.parent(libst_gir[1].full_path())
 
+# Shared tests dependencies.
+tests_dependencies = [
+  compiled_schemas,
+  data_resources_targets,
+  libst_gir[1],
+  libshell_gir[1],
+  libgvc_gir[1],
+]
+
 unit_testenv = environment()
 unit_testenv.set('GNOME_SHELL_DATADIR', data_builddir)
 unit_testenv.append('GI_TYPELIB_PATH', gvc_typelib_path, separator: ':')
@@ -22,6 +31,12 @@ unit_testenv.append('GI_TYPELIB_PATH', st_typelib_path, separator: ':')
 unit_tests = {
   'breakManager': {},
   'extensionUtils': {},
+  'fileUtils': {
+    'env': {
+      'XDG_DATA_DIRS': join_paths(meson.current_source_dir(), 'unit/fixtures/datadirs/system'),
+      'XDG_DATA_HOME': join_paths(meson.current_source_dir(), 'unit/fixtures/datadirs/home'),
+    },
+  },
   'highlighter': {},
   'injectionManager': {},
   'insertSorted': {},
@@ -41,7 +56,7 @@ unit_tests = {
 foreach test, extra_args : unit_tests
   local_test_env = unit_testenv
   foreach var, value : extra_args.get('env', {})
-    local_test_env.append(var, value)
+    local_test_env.set(var, value)
   endforeach
 
   test(test, jasmine,
@@ -53,6 +68,7 @@ foreach test, extra_args : unit_tests
       'unit/@0@.js'.format(test),
     ],
     suite: 'unit',
+    depends: tests_dependencies,
     env: local_test_env,
     protocol: 'tap',
     workdir: meson.current_source_dir())
@@ -99,6 +115,11 @@ foreach shell_test : shell_tests
       '--headless',
       options,
       '@0@/shell/@1@.js'.format(meson.current_source_dir(), test_name),
+    ],
+    depends: [
+      gnome_shell_binary,
+      gnome_shell_perf_helper,
+      tests_dependencies,
     ],
     is_parallel: false,
     env: shell_testenv,

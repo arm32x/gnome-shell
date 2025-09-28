@@ -770,7 +770,7 @@ class NotificationMessage extends Message {
     }
 });
 
-const MediaMessage = GObject.registerClass(
+export const MediaMessage = GObject.registerClass(
 class MediaMessage extends Message {
     constructor(player) {
         super(player.source);
@@ -798,6 +798,9 @@ class MediaMessage extends Message {
     }
 
     vfunc_clicked() {
+        if (Main.sessionMode.isLocked)
+            return;
+
         this._player.raise();
         Main.panel.closeCalendar();
     }
@@ -832,7 +835,7 @@ class MediaMessage extends Message {
     }
 });
 
-const NotificationMessageGroup = GObject.registerClass({
+export const NotificationMessageGroup = GObject.registerClass({
     Properties: {
         'expanded': GObject.ParamSpec.boolean(
             'expanded', null, null,
@@ -853,7 +856,7 @@ const NotificationMessageGroup = GObject.registerClass({
     },
 }, class NotificationMessageGroup extends St.Widget {
     constructor(source) {
-        const action =  new Clutter.ClickAction();
+        const action =  new Clutter.ClickGesture();
 
         // A widget that covers stacked messages so that they don't receive events
         const cover = new St.Widget({
@@ -909,7 +912,7 @@ const NotificationMessageGroup = GObject.registerClass({
         });
 
         this._unexpandButton.connect('clicked', () => this.emit('expand-toggle-requested'));
-        action.connect('clicked', () => this.emit('expand-toggle-requested'));
+        action.connect('recognize', () => this.emit('expand-toggle-requested'));
 
         this._headerBox.add_child(this._unexpandButton);
         this.add_child(this._headerBox);

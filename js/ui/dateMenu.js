@@ -132,6 +132,7 @@ class EventsSection extends St.Button {
             style_class: 'events-title',
         });
         this.child.add_child(this._title);
+        this.labelActor = this._title;
 
         this._eventsList = new St.BoxLayout({
             style_class: 'events-list',
@@ -500,7 +501,7 @@ class WorldClocksSection extends St.Button {
         const prefix = offsetCurrentTz >= 0 ? '+' : '-';
         const text = offsetMinutes === 0
             ? `${prefix}${offsetHours}`
-            : `${prefix}${offsetHours}\u2236${offsetMinutes}`;
+            : `${prefix}${offsetHours}:${offsetMinutes}`;
         return text;
     }
 
@@ -567,6 +568,7 @@ class WeatherSection extends St.Button {
         });
         titleBox.add_child(this._titleLabel);
         box.add_child(titleBox);
+        this.labelActor = this._titleLabel;
 
         this._titleLocation = new St.Label({
             style_class: 'weather-header location',
@@ -742,6 +744,7 @@ class MessagesIndicator extends St.Icon {
     _init() {
         super._init({
             style_class: 'messages-indicator',
+            icon_name: 'message-indicator-symbolic',
             visible: false,
             y_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
@@ -790,11 +793,8 @@ class MessagesIndicator extends St.Icon {
     }
 
     _sync() {
-        let doNotDisturb = !this._settings.get_boolean('show-banners');
-        this.icon_name = doNotDisturb
-            ? 'notifications-disabled-symbolic'
-            : 'message-indicator-symbolic';
-        this.visible = doNotDisturb || this._count > 0;
+        const doNotDisturb = !this._settings.get_boolean('show-banners');
+        this.visible = !doNotDisturb && this._count > 0;
     }
 });
 

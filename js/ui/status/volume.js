@@ -281,7 +281,7 @@ const StreamSlider = GObject.registerClass({
         const gicon = new Gio.ThemedIcon({name: this.getIcon()});
         const level = this.getLevel();
         const maxLevel = this.getMaxLevel();
-        Main.osdWindowManager.show(-1, gicon, null, level, maxLevel);
+        Main.osdWindowManager.showAll(gicon, null, level, maxLevel);
     }
 });
 
@@ -307,6 +307,7 @@ class OutputStreamSlider extends StreamSlider {
         ];
 
         this.menu.setHeader('audio-headphones-symbolic', _('Sound Output'));
+        this.menuButtonAccessibleName = _('Open sound output menu');
     }
 
     _connectStream(stream) {
@@ -382,6 +383,7 @@ class InputStreamSlider extends StreamSlider {
         ];
 
         this.menu.setHeader('audio-input-microphone-symbolic', _('Sound Input'));
+        this.menuButtonAccessibleName = _('Open sound input menu');
     }
 
     _connectStream(stream) {
@@ -431,12 +433,27 @@ class VolumeIndicator extends SystemIndicator {
     }
 
     _handleScrollEvent(item, event) {
-        const result = item.slider.scroll(event);
-        if (result === Clutter.EVENT_PROPAGATE || item.mapped)
-            return result;
+        if (event.get_flags() & Clutter.EventFlags.FLAG_POINTER_EMULATED)
+            return Clutter.EVENT_PROPAGATE;
 
-        item.showOSD();
-        return result;
+        let direction = event.get_scroll_direction();
+        let nSteps = 0;
+        if (direction === Clutter.ScrollDirection.DOWN) {
+            nSteps = -1;
+        } else if (direction === Clutter.ScrollDirection.UP) {
+            nSteps = 1;
+        } else if (direction === Clutter.ScrollDirection.SMOOTH) {
+            let [, dy] = event.get_scroll_delta();
+            nSteps = -dy;
+            // Match physical direction
+            if (event.get_scroll_flags() & Clutter.ScrollFlags.INVERTED)
+                nSteps *= -1;
+        }
+
+        if (item.mapped || item.slider.step(nSteps))
+            item.showOSD();
+
+        return Clutter.EVENT_STOP;
     }
 });
 

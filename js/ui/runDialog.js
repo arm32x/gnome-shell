@@ -62,14 +62,17 @@ class RunDialog extends ModalDialog.ModalDialog {
 
         let content = new Dialog.MessageDialogContent({title});
         this.contentLayout.add_child(content);
+        const [labelActor] = content;
 
         let entry = new St.Entry({
             style_class: 'run-dialog-entry',
+            labelActor,
             can_focus: true,
         });
         ShellEntry.addContextMenu(entry);
 
         this._entryText = entry.clutter_text;
+        this._entryText.activatable = false;
         content.add_child(entry);
         this.setInitialKeyFocus(this._entryText);
 
@@ -90,14 +93,6 @@ class RunDialog extends ModalDialog.ModalDialog {
             gsettingsKey: HISTORY_KEY,
             entry: this._entryText,
         });
-        this._entryText.connect('activate', o => {
-            this.popModal();
-            this._run(o.get_text(),
-                Clutter.get_current_event().get_state() & Clutter.ModifierType.CONTROL_MASK);
-            if (!this._commandError ||
-                !this.pushModal())
-                this.close();
-        });
         this._entryText.connect('key-press-event', (o, e) => {
             let symbol = e.get_key_symbol();
             if (symbol === Clutter.KEY_Tab) {
@@ -112,6 +107,14 @@ class RunDialog extends ModalDialog.ModalDialog {
                     o.insert_text(postfix, -1);
                     o.set_cursor_position(text.length + postfix.length);
                 }
+                return Clutter.EVENT_STOP;
+            } else if ([Clutter.KEY_Return, Clutter.KEY_KP_Enter, Clutter.KEY_ISO_Enter].includes(symbol)) {
+                this.popModal();
+                this._run(o.get_text(),
+                    Clutter.get_current_event().get_state() & Clutter.ModifierType.CONTROL_MASK);
+                if (!this._commandError ||
+                    !this.pushModal())
+                    this.close();
                 return Clutter.EVENT_STOP;
             }
             return Clutter.EVENT_PROPAGATE;

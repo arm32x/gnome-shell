@@ -103,18 +103,18 @@ export const PopupBaseMenuItem = GObject.registerClass({
         this._activatable = params.reactive && params.activate;
         this._sensitive = true;
 
-        this._clickAction = new Clutter.ClickAction({
+        this._clickGesture = new Clutter.ClickGesture({
             enabled: this._activatable,
         });
-        this._clickAction.connect('clicked',
+        this._clickGesture.connect('recognize',
             () => this.activate(Clutter.get_current_event()));
-        this._clickAction.connect('notify::pressed', () => {
-            if (this._clickAction.pressed)
+        this._clickGesture.connect('notify::pressed', () => {
+            if (this._clickGesture.pressed)
                 this.add_style_pseudo_class('active');
             else
                 this.remove_style_pseudo_class('active');
         });
-        this.add_action(this._clickAction);
+        this.add_action(this._clickGesture);
 
         if (!this._activatable)
             this.add_style_class_name('popup-inactive-menu-item');
@@ -308,6 +308,7 @@ class PopupSeparatorMenuItem extends PopupBaseMenuItem {
         this.label = new St.Label({text: text || ''});
         this.add_child(this.label);
         this.label_actor = this.label;
+        this.accessible_role = Atk.Role.SEPARATOR;
 
         this.label.connect('notify::text',
             this._syncVisibility.bind(this));
@@ -452,40 +453,45 @@ export const Switch = GObject.registerClass({
 
         this._dragging = true;
         [this._initialGrabX] = event.get_coords();
-        let device = event.get_device();
-        let sequence = event.get_event_sequence();
 
         this._grab = global.stage.grab(this);
 
-        this._grabbedDevice = device;
-        this._grabbedSequence = sequence;
+        const backend = global.stage.get_context().get_backend();
+        const sprite = backend.get_sprite(global.stage, event);
+        this._sprite = sprite;
 
         return Clutter.EVENT_STOP;
     }
 
-    vfunc_motion_event() {
-        if (this._dragging && !this._grabbedSequence)
+    vfunc_motion_event(event) {
+        const backend = this.get_context().get_backend();
+        const sprite = backend.get_sprite(global.stage, event);
+
+        if (this._dragging && this._sprite === sprite)
             return this._motionEvent(this, Clutter.get_current_event());
 
         return Clutter.EVENT_PROPAGATE;
     }
 
-    vfunc_button_release_event() {
-        if (this._dragging && !this._grabbedSequence)
+    vfunc_button_release_event(event) {
+        const backend = this.get_context().get_backend();
+        const sprite = backend.get_sprite(global.stage, event);
+
+        if (this._dragging && this._sprite === sprite)
             return this._endDragging();
 
         return Clutter.EVENT_PROPAGATE;
     }
 
     _touchDragging(actor, event) {
-        let sequence = event.get_event_sequence();
+        const backend = actor.get_context().get_backend();
+        const sprite = backend.get_sprite(global.stage, event);
 
         if (!this._dragging &&
             event.type() === Clutter.EventType.TOUCH_BEGIN) {
             this.startDragging(event);
             return Clutter.EVENT_STOP;
-        } else if (this._grabbedSequence &&
-                   sequence.get_slot() === this._grabbedSequence.get_slot()) {
+        } else if (this._sprite === sprite) {
             if (event.type() === Clutter.EventType.TOUCH_UPDATE)
                 return this._motionEvent(this, event);
             else if (event.type() === Clutter.EventType.TOUCH_END)
@@ -510,8 +516,7 @@ export const Switch = GObject.registerClass({
             this.toggle();
 
         this._dragged = false;
-        this._grabbedSequence = null;
-        this._grabbedDevice = null;
+        this._sprite = null;
         this._dragging = false;
 
         return Clutter.EVENT_STOP;
@@ -1117,6 +1122,13 @@ export class PopupMenu extends PopupMenuBase {
         this._boxPointer.open(animate);
 
         this.actor.get_parent().set_child_above_sibling(this.actor, null);
+
+        /* The position calculation expects the source actor allocation to be
+         * up to date, so queue relayout on parent to ensure it gets allocated
+         * first.
+         */
+        if (!this.sourceActor?.has_allocation())
+            this.sourceActor?.get_parent().queue_relayout();
 
         this.emit('open-state-changed', true);
     }

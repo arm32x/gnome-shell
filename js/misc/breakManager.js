@@ -180,10 +180,15 @@ export const BreakManager = GObject.registerClass({
             }
         }
 
+        this.freeze_notify();
         this.notify('next-break-due-time');
 
         if (this._state === BreakState.DISABLED)
             this._startStateMachine();
+        else
+            this._updateState(currentTime);
+
+        this.thaw_notify();
 
         return true;
     }
@@ -866,13 +871,6 @@ class BreakDispatcher extends GObject.Object {
     _brightnessEffectOn() {
         // the effect value is in the range [0, 255] with 127 as the ‘no change’ mid-point
         const startVal = 127;
-        const startColor = new Cogl.Color({
-            red: startVal,
-            green: startVal,
-            blue: startVal,
-            alpha: 255,
-        });
-
         const finishVal = 127 * BRIGHTNESS_FACTOR;
         const finishColor = new Cogl.Color({
             red: finishVal,
@@ -881,7 +879,7 @@ class BreakDispatcher extends GObject.Object {
             alpha: 255,
         });
 
-        this._brightnessEffect.brightness = startColor;
+        this._brightnessEffect.set_brightness(startVal);
         this._brightnessEffect.set_enabled(true);
 
         Main.layoutManager.uiGroup.ease_property(
@@ -950,7 +948,7 @@ class BreakNotificationSource extends GObject.Object {
         }
 
         if (this._notification === null) {
-            this._notification = new BreakNotification(this._source, this._manager);
+            this._notification = new BreakNotification(this._source, this._manager, this._app);
             this._notification.connect('destroy', () => (this._notification = null));
         }
 
@@ -1102,6 +1100,7 @@ class BreakNotificationSource extends GObject.Object {
                                 title: titleText,
                                 body: bodyText,
                                 sound: null,
+                                urgency: this._urgencyForBreakType(nextBreakType),
                                 allowDelay: true,
                                 allowSkip: true,
                                 allowTake: false,
@@ -1192,11 +1191,11 @@ class BreakNotificationSource extends GObject.Object {
             if ((this._previousState === BreakState.ACTIVE ||
                  this._previousState === BreakState.DISABLED) &&
                 breakDueAgo < BREAK_OVERDUE_TIME_SECONDS) {
-                const durationSecs = this._manager.getDurationForBreakType(this._manager.currentBreakType);
+                const durationSecs = this._manager.getDurationForBreakType(nextBreakType);
                 const [durationText, durationValue, unused] = this._formatTimeSpan(durationSecs);
 
                 let titleText, bodyText;
-                switch (this._manager.currentBreakType) {
+                switch (nextBreakType) {
                 case 'movement':
                     titleText = _('Time for a Movement Break');
                     bodyText = Gettext.ngettext(
@@ -1230,10 +1229,12 @@ class BreakNotificationSource extends GObject.Object {
                     title: titleText,
                     body: bodyText,
                     sound: null,
+                    urgency: this._urgencyForBreakType(nextBreakType),
                     allowDelay: true,
                     allowSkip: false,
                     allowTake: true,
                 });
+                this._source.addNotification(this._notification);
 
                 this._scheduleUpdateState(BREAK_OVERDUE_TIME_SECONDS);
             } else if (breakDueAgo >= BREAK_OVERDUE_TIME_SECONDS &&
@@ -1250,17 +1251,19 @@ class BreakNotificationSource extends GObject.Object {
                     title: _('Break Overdue'),
                     body: bodyText,
                     sound: null,
+                    urgency: this._urgencyForBreakType(nextBreakType),
                     allowDelay: true,
                     allowSkip: false,
                     allowTake: true,
                 });
+                this._source.addNotification(this._notification);
 
                 this._scheduleUpdateState(updateTimeoutSeconds);
             } else if (this._previousState === BreakState.IN_BREAK) {
-                const durationSecs = this._manager.getDurationForBreakType(this._manager.currentBreakType);
+                const durationSecs = this._manager.getDurationForBreakType(nextBreakType);
                 const [countdownText, countdownValue, updateTimeoutSeconds] = this._formatTimeSpan(durationSecs - breakDueAgo);
+                /* Translators: %s will be replaced with a string that describes a time interval, such as “2 minutes”, “40 seconds” or “1 hour” */
                 const bodyText = Gettext.ngettext(
-                    /* %s will be replaced with a string that describes a time interval, such as “2 minutes”, “40 seconds” or “1 hour” */
                     'There is %s remaining in your break',
                     'There are %s remaining in your break',
                     countdownValue
@@ -1270,16 +1273,16 @@ class BreakNotificationSource extends GObject.Object {
                     title: _('Break Interrupted'),
                     body: bodyText,
                     sound: null,
+                    urgency: this._urgencyForBreakType(nextBreakType),
                     allowDelay: false,
                     allowSkip: false,
                     allowTake: false,
                 });
+                this._source.addNotification(this._notification);
 
                 this._scheduleUpdateState(updateTimeoutSeconds);
             }
 
-            this._notification.urgency = this._urgencyForBreakType(this._manager.currentBreakType);
-            this._source.addNotification(this._notification);
             break;
         }
 
@@ -1306,18 +1309,24 @@ const BreakNotification = GObject.registerClass({
             false),
     },
 }, class BreakNotification extends MessageTray.Notification {
-    constructor(source, manager) {
+    constructor(source, manager, app) {
         super({
             source,
             resident: true,
         });
 
         this._manager = manager;
+        this._app = app;
         this.connect('destroy', this._onDestroy.bind(this));
 
         this._delayAction = null;
         this._skipAction = null;
         this._takeAction = null;
+    }
+
+    activate() {
+        this._app.activate();
+        super.activate();
     }
 
     _onDestroy(_notification, destroyedReason) {
@@ -1338,6 +1347,7 @@ const BreakNotification = GObject.registerClass({
             return;
 
         if (allowDelay) {
+            /* Translators: As in "Delay the break" */
             this._delayAction = this.addAction(_('Delay'), this._onDelayAction.bind(this));
         } else {
             this.removeAction(this._delayAction);
@@ -1359,6 +1369,7 @@ const BreakNotification = GObject.registerClass({
             return;
 
         if (allowSkip) {
+            /* Translators: As in "Skip the break" */
             this._skipAction = this.addAction(_('Skip'), this._onSkipAction.bind(this));
         } else {
             this.removeAction(this._skipAction);
@@ -1380,6 +1391,7 @@ const BreakNotification = GObject.registerClass({
             return;
 
         if (allowTake) {
+            /* Translators: As in "Take the break" */
             this._takeAction = this.addAction(_('Take'), this._onTakeAction.bind(this));
         } else {
             this.removeAction(this._takeAction);

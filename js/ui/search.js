@@ -14,10 +14,12 @@ import * as RemoteSearch from './remoteSearch.js';
 import {ensureActorVisibleInScrollView} from '../misc/animationUtils.js';
 
 import {Highlighter} from '../misc/util.js';
+import {Spinner} from './animation.js';
 
 const SEARCH_PROVIDERS_SCHEMA = 'org.gnome.desktop.search-providers';
 
 const MAX_LIST_SEARCH_RESULTS_ROWS = 5;
+const SEARCH_SPINNER_SIZE = 64;
 
 const MaxWidthBox = GObject.registerClass(
 class MaxWidthBox extends St.BoxLayout {
@@ -274,7 +276,7 @@ const SearchResultsBase = GObject.registerClass({
                 this._setMoreCount(this.provider.canLaunchSearch ? moreCount : 0);
                 this.show();
                 callback();
-            } catch (e) {
+            } catch {
                 this._clearResultDisplay();
                 callback();
             }
@@ -397,10 +399,10 @@ const GridSearchResultsLayout = GObject.registerClass({
 
     vfunc_allocate(container, box) {
         const width = box.get_width();
+        const ltr = container.get_text_direction() !== Clutter.TextDirection.RTL;
 
         const childBox = new Clutter.ActorBox();
-        childBox.x1 = 0;
-        childBox.y1 = 0;
+        let accumulatedWidth = 0;
 
         let first = true;
         for (let child of container) {
@@ -410,20 +412,25 @@ const GridSearchResultsLayout = GObject.registerClass({
             if (first)
                 first = false;
             else
-                childBox.x1 += this._spacing;
+                accumulatedWidth += this._spacing;
 
             const [childWidth] = child.get_preferred_width(-1);
             const [childHeight] = child.get_preferred_height(-1);
 
-            if (childBox.x1 + childWidth <= width)
+            if (ltr)
+                childBox.set_origin(accumulatedWidth, 0);
+            else
+                childBox.set_origin(width - accumulatedWidth - childWidth, 0);
+
+            accumulatedWidth += childWidth;
+
+            if (accumulatedWidth <= width)
                 childBox.set_size(childWidth, childHeight);
             else
                 childBox.set_size(0, 0);
 
             child.allocate(childBox);
             child.can_focus = childBox.get_area() > 0;
-
-            childBox.x1 += childWidth;
         }
     }
 
@@ -580,22 +587,29 @@ export const SearchResultsView = GObject.registerClass({
             child: this._content,
         });
 
-        let action = new Clutter.PanAction({interpolate: true});
-        action.connect('pan', this._onPan.bind(this));
-        this._scrollView.add_action(action);
+        const panGesture = new Clutter.PanGesture();
+        panGesture.connect('pan-update', this._onPanUpdate.bind(this));
+        this._scrollView.add_action(panGesture);
 
         this.add_child(this._scrollView);
 
-        this._statusText = new St.Label({
-            style_class: 'search-statustext',
+        this._statusContainer = new St.BoxLayout({
+            style_class: 'search-statusbox',
+            orientation: Clutter.Orientation.VERTICAL,
+            x_expand: true,
+            y_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this._statusBin = new St.Bin({
-            y_expand: true,
-            child: this._statusText,
-        });
-        this.add_child(this._statusBin);
+
+        this._statusSpinner = new Spinner(SEARCH_SPINNER_SIZE);
+
+        this._statusText = new St.Label({style_class: 'search-statustext'});
+
+        this._statusContainer.add_child(this._statusSpinner);
+        this._statusContainer.add_child(this._statusText);
+
+        this.add_child(this._statusContainer);
 
         this._highlightDefault = false;
         this._defaultResult = null;
@@ -752,11 +766,11 @@ export const SearchResultsView = GObject.registerClass({
         this.emit('terms-changed');
     }
 
-    _onPan(action) {
-        let [dist_, dx_, dy] = action.get_motion_delta(0);
-        let adjustment = this._scrollView.vadjustment;
-        adjustment.value -= (dy / this.height) * adjustment.page_size;
-        return false;
+    _onPanUpdate(gesture) {
+        const adjustment = this._scrollView.vadjustment;
+        const delta = gesture.get_delta();
+
+        adjustment.value -= (delta.get_y() / this.height) * adjustment.page_size;
     }
 
     _focusChildChanged(provider) {
@@ -825,13 +839,16 @@ export const SearchResultsView = GObject.registerClass({
         });
 
         this._scrollView.visible = haveResults;
-        this._statusBin.visible = !haveResults;
+        this._statusContainer.visible = !haveResults;
 
         if (!haveResults) {
-            if (this.searchInProgress)
-                this._statusText.set_text(_('Searching…'));
-            else
+            if (this.searchInProgress) {
+                this._statusSpinner.play();
+                this._statusText.set_text(_('Searching'));
+            } else {
+                this._statusSpinner.stop();
                 this._statusText.set_text(_('No results'));
+            }
         }
     }
 

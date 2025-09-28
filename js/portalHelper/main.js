@@ -35,7 +35,7 @@ const HTTP_URI_FLAGS =
 
 const CONNECTIVITY_CHECK_HOST = 'nmcheck.gnome.org';
 const CONNECTIVITY_CHECK_URI = `http://${CONNECTIVITY_CHECK_HOST}`;
-const CONNECTIVITY_RECHECK_RATELIMIT_TIMEOUT = 30 * GLib.USEC_PER_SEC;
+const CONNECTIVITY_RECHECK_RATELIMIT_TIMEOUT = 5 * GLib.USEC_PER_SEC;
 
 const HelperDBusInterface = loadInterfaceXML('org.gnome.Shell.PortalHelper');
 
@@ -109,7 +109,7 @@ class PortalSecurityButton extends Gtk.MenuButton {
 
 const PortalWindow = GObject.registerClass(
 class PortalWindow extends Gtk.ApplicationWindow {
-    _init(application, url, timestamp, doneCallback) {
+    _init(application, url, timestamp, statusChangedCallback) {
         super._init({
             application,
             title: _('Hotspot Login'),
@@ -132,9 +132,9 @@ class PortalWindow extends Gtk.ApplicationWindow {
         this._uri = GLib.Uri.parse(url, HTTP_URI_FLAGS);
         this._everSeenRedirect = false;
         this._originalUrl = url;
-        this._doneCallback = doneCallback;
+        this._statusChangedCallback = statusChangedCallback;
         this._lastRecheck = 0;
-        this._recheckAtExit = false;
+        this._recheckTimeoutId = 0;
 
         this._networkSession = WebKit.NetworkSession.new_ephemeral();
         this._networkSession.set_proxy_settings(WebKit.NetworkProxyMode.NO_PROXY, null);
@@ -180,10 +180,12 @@ class PortalWindow extends Gtk.ApplicationWindow {
     }
 
     vfunc_close_request() {
-        if (this._recheckAtExit)
-            this._doneCallback(PortalHelperResult.RECHECK);
-        else
-            this._doneCallback(PortalHelperResult.CANCELLED);
+        if (this._recheckTimeoutId) {
+            this._statusChangedCallback(PortalHelperResult.RECHECK);
+            GLib.source_remove(this._recheckTimeoutId);
+            this._recheckTimeoutId = 0;
+        }
+        this._statusChangedCallback(PortalHelperResult.CANCELLED);
         return false;
     }
 
@@ -236,13 +238,16 @@ class PortalWindow extends Gtk.ApplicationWindow {
             return true;
         }
 
+        if (type !== WebKit.PolicyDecisionType.NAVIGATION_ACTION)
+            return false;
+
         const uri = GLib.Uri.parse(request.get_uri(), HTTP_URI_FLAGS);
 
         if (uri.get_host() !== this._uri.get_host() && this._originalUrlWasGnome) {
             if (uri.get_host() === CONNECTIVITY_CHECK_HOST && this._everSeenRedirect) {
                 // Yay, we got to gnome!
                 decision.ignore();
-                this._doneCallback(PortalHelperResult.COMPLETED);
+                this._statusChangedCallback(PortalHelperResult.COMPLETED);
                 return true;
             } else if (uri.get_host() !== CONNECTIVITY_CHECK_HOST) {
                 this._everSeenRedirect = true;
@@ -254,23 +259,24 @@ class PortalWindow extends Gtk.ApplicationWindow {
         // (but ratelimit the checks, we don't want to spam
         // nmcheck.gnome.org for portals that have 10 or more internal
         // redirects - and unfortunately they exist)
-        // If we hit the rate limit, we also queue a recheck
-        // when the window is closed, just in case we miss the
-        // final check and don't realize we're connected
-        // This should not be a problem in the cancelled logic,
-        // because if the user doesn't want to start the login,
-        // we should not see any redirect at all, outside this._uri
 
-        let now = GLib.get_monotonic_time();
-        let shouldRecheck = (now - this._lastRecheck) >
-            CONNECTIVITY_RECHECK_RATELIMIT_TIMEOUT;
+        if (this._recheckTimeoutId === 0) {
+            const now = GLib.get_monotonic_time();
+            const timeSinceLastRecheck = this._lastRecheck ? now - this._lastRecheck : 0;
 
-        if (shouldRecheck) {
-            this._lastRecheck = now;
-            this._recheckAtExit = false;
-            this._doneCallback(PortalHelperResult.RECHECK);
-        } else {
-            this._recheckAtExit = true;
+            if (timeSinceLastRecheck > CONNECTIVITY_RECHECK_RATELIMIT_TIMEOUT || this._lastRecheck === 0) {
+                this._lastRecheck = now;
+                this._statusChangedCallback(PortalHelperResult.RECHECK);
+            } else {
+                const seconds =
+                    (CONNECTIVITY_RECHECK_RATELIMIT_TIMEOUT - timeSinceLastRecheck) /
+                    GLib.USEC_PER_SEC;
+                this._recheckTimeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, seconds, () => {
+                    this._statusChangedCallback(PortalHelperResult.RECHECK);
+                    this._recheckTimeoutId = 0;
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
         }
 
         // Update the URI, in case of chained redirects, so we still
@@ -358,7 +364,7 @@ class WebPortalHelper extends Adw.Application {
             return;
 
         top.window = new PortalWindow(this, top.url, top.timestamp, result => {
-            this._dbusImpl.emit_signal('Done', new GLib.Variant('(ou)', [top.connection, result]));
+            this._dbusImpl.emit_signal('StatusChanged', new GLib.Variant('(ou)', [top.connection, result]));
         });
     }
 });

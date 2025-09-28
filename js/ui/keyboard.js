@@ -9,7 +9,6 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Signals from '../misc/signals.js';
 
-import * as EdgeDragAction from './edgeDragAction.js';
 import * as InputSourceManager from './status/keyboard.js';
 import * as IBusManager from '../misc/ibusManager.js';
 import * as BoxPointer from './boxpointer.js';
@@ -620,7 +619,11 @@ const EmojiPager = GObject.registerClass({
         const swipeTracker = new SwipeTracker.SwipeTracker(this,
             Clutter.Orientation.HORIZONTAL,
             Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
-            {allowDrag: true, allowScroll: true});
+            {
+                allowDrag: true,
+                allowScroll: true,
+                name: 'EmojiPager swipe tracker',
+            });
         swipeTracker.connect('begin', this._onSwipeBegin.bind(this));
         swipeTracker.connect('update', this._onSwipeUpdate.bind(this));
         swipeTracker.connect('end', this._onSwipeEnd.bind(this));
@@ -1072,22 +1075,25 @@ export class KeyboardManager extends Signals.EventEmitter {
             this._syncEnabled();
         });
 
-        const mode = Shell.ActionMode.ALL & ~Shell.ActionMode.LOCK_SCREEN;
-        const bottomDragAction = new EdgeDragAction.EdgeDragAction(St.Side.BOTTOM, mode);
-        bottomDragAction.connect('activated', () => {
-            if (this._keyboard)
-                this._keyboard.gestureActivate(Main.layoutManager.bottomIndex);
+        const allowedModes = Shell.ActionMode.ALL & ~Shell.ActionMode.LOCK_SCREEN;
+        const bottomDragGesture = new Shell.EdgeDragGesture({
+            name: 'OSK show bottom drag',
+            side: St.Side.BOTTOM,
         });
-        bottomDragAction.connect('progress', (_action, progress) => {
-            if (this._keyboard)
-                this._keyboard.gestureProgress(progress);
+        bottomDragGesture.connect('may-recognize', () => {
+            return allowedModes & Main.actionMode;
         });
-        bottomDragAction.connect('gesture-cancel', () => {
-            if (this._keyboard)
-                this._keyboard.gestureCancel();
+        bottomDragGesture.connect('progress', (_action, progress) => {
+            this._keyboard?.gestureProgress(progress);
         });
-        global.stage.add_action_full('osk', Clutter.EventPhase.CAPTURE, bottomDragAction);
-        this._bottomDragAction = bottomDragAction;
+        bottomDragGesture.connect('end', () => {
+            this._keyboard?.gestureActivate(Main.layoutManager.bottomIndex);
+        });
+        bottomDragGesture.connect('cancel', () => {
+            this._keyboard?.gestureCancel();
+        });
+        global.stage.add_action(bottomDragGesture);
+        this._bottomDragGesture = bottomDragGesture;
 
         this._syncEnabled();
     }
@@ -1112,13 +1118,13 @@ export class KeyboardManager extends Signals.EventEmitter {
             this._keyboard = new Keyboard();
             this._keyboard.connect('visibility-changed', () => {
                 this.emit('visibility-changed');
-                this._bottomDragAction.enabled = !this._keyboard.visible;
+                this._bottomDragGesture.enabled = !this._keyboard.visible;
             });
         } else if (!enabled && this._keyboard) {
             this._keyboard.setCursorLocation(null);
             this._keyboard.destroy();
             this._keyboard = null;
-            this._bottomDragAction.enabled = true;
+            this._bottomDragGesture.enabled = true;
         }
     }
 
@@ -1305,18 +1311,13 @@ export const Keyboard = GObject.registerClass({
         this._keyboardController.connectObject(
             'group-changed', this._onGroupChanged.bind(this),
             'panel-state', this._onKeyboardStateChanged.bind(this),
-            'purpose-changed', this._onPurposeChanged.bind(this),
+            'purpose-changed', () => this._updateKeys(),
             'content-hints-changed', this._onContentHintsChanged.bind(this),
             this);
         global.stage.connectObject('notify::key-focus',
             this._onKeyFocusChanged.bind(this), this);
 
         this._relayout();
-    }
-
-    _onPurposeChanged(controller, purpose) {
-        this._purpose = purpose;
-        this._updateKeys();
     }
 
     _onContentHintsChanged(controller, contentHint) {
@@ -1439,7 +1440,7 @@ export const Keyboard = GObject.registerClass({
                 try {
                     keyboardModel = new KeyboardModel(group);
                     break;
-                } catch (e) {
+                } catch {
                     // Ignore this error and fall back to next model
                 }
             }
@@ -1660,7 +1661,8 @@ export const Keyboard = GObject.registerClass({
 
     _updateKeys() {
         const group = this._keyboardController.getCurrentGroup();
-        this._updateLayout(group, this._purpose);
+        const {purpose} = this._keyboardController;
+        this._updateLayout(group, purpose);
         this._setActiveLevel('default');
     }
 
@@ -1994,11 +1996,16 @@ class KeyboardController extends Signals.EventEmitter {
             'current-source-changed', this._onSourceChanged.bind(this),
             'sources-changed', this._onSourcesModified.bind(this), this);
         this._currentSource = this._inputSourceManager.currentSource;
+        this._purpose = Main.inputMethod.contentPurpose;
 
         Main.inputMethod.connectObject(
             'notify::content-purpose', this._onPurposeHintsChanged.bind(this),
             'notify::content-hints', this._onContentHintsChanged.bind(this),
             'input-panel-state', (o, state) => this.emit('panel-state', state), this);
+    }
+
+    get purpose() {
+        return this._purpose;
     }
 
     destroy() {

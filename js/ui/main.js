@@ -1,5 +1,6 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GioUnix from 'gi://GioUnix';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
@@ -9,6 +10,7 @@ import St from 'gi://St';
 import * as AccessDialog from './accessDialog.js';
 import * as AudioDeviceSelection from './audioDeviceSelection.js';
 import * as BreakManager from '../misc/breakManager.js';
+import * as BrightnessManager from '../misc/brightnessManager.js';
 import * as Config from '../misc/config.js';
 import * as Components from './components.js';
 import * as CtrlAltTab from './ctrlAltTab.js';
@@ -96,6 +98,8 @@ export let screenTimeDBus = null;
 export let breakManagerDispatcher = null;
 export let timeLimitsManager = null;
 export let timeLimitsDispatcher = null;
+export let brightnessManager = null;
+export let brightnessDBus = null;
 
 let _startDate;
 let _defaultCssStylesheet = null;
@@ -154,7 +158,7 @@ export async function start() {
             // toString() can throw
             if (msg)
                 args.unshift(`${msg}:`);
-        } catch (e) {}
+        } catch {}
 
         console.error(...args);
     };
@@ -166,7 +170,7 @@ export async function start() {
 
     let currentDesktop = GLib.getenv('XDG_CURRENT_DESKTOP');
     if (!currentDesktop || !currentDesktop.split(':').includes('GNOME'))
-        Gio.DesktopAppInfo.set_desktop_env('GNOME');
+        GioUnix.DesktopAppInfo.set_desktop_env('GNOME');
 
     sessionMode = new SessionMode.SessionMode();
     sessionMode.connect('updated', _sessionUpdated);
@@ -257,6 +261,9 @@ async function _initializeUI() {
     screenTimeDBus = new ShellDBus.ScreenTimeDBus(breakManager);
     breakManagerDispatcher = new BreakManager.BreakDispatcher(breakManager);
     timeLimitsDispatcher = new TimeLimitsManager.TimeLimitsDispatcher(timeLimitsManager);
+
+    brightnessManager = new BrightnessManager.BrightnessManager();
+    brightnessDBus = new ShellDBus.BrightnessDBus(brightnessManager);
 
     global.connect('shutdown', () => {
         // Block shutdown until the session history file has been written

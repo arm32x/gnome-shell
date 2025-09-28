@@ -24,8 +24,14 @@
       "config-opts": ["-Dprofile=development"],
       "sources": [
         {
+          "type": "dir",
+          "path": "../../../.."
+        },
+        {
           "type": "git",
-          "url": "https://gitlab.gnome.org/GNOME/gnome-shell.git"
+          "url": "https://gitlab.gnome.org/GNOME/libshew.git",
+          "dest": "subprojects/extensions-app/subprojects/libshew",
+          "branch": "main"
         },
         {
           "type": "shell",

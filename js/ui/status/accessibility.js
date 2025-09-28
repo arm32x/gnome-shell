@@ -5,6 +5,7 @@ import St from 'gi://St';
 
 import * as PanelMenu from '../panelMenu.js';
 import * as PopupMenu from '../popupMenu.js';
+import {QuickToggle} from '../quickSettings.js';
 
 const A11Y_SCHEMA                   = 'org.gnome.desktop.a11y';
 const KEY_ALWAYS_SHOW               = 'always-show-universal-access-status';
@@ -35,7 +36,7 @@ class ATIndicator extends PanelMenu.Button {
 
         this.add_child(new St.Icon({
             style_class: 'system-status-icon',
-            icon_name: 'org.gnome.Settings-accessibility-symbolic',
+            icon_name: 'accessibility-menu-symbolic',
         }));
 
         this._a11ySettings = new Gio.Settings({schema_id: A11Y_SCHEMA});
@@ -144,5 +145,185 @@ class ATIndicator extends PanelMenu.Button {
             false);
 
         return widget;
+    }
+});
+
+export const HighContrastToggle = GObject.registerClass(
+class HighContrastToggle extends QuickToggle {
+    constructor() {
+        super({
+            title: _('High Contrast'),
+            iconName: 'accessibility-high-contrast-symbolic',
+            toggleMode: true,
+        });
+
+        const settings = new Gio.Settings({schemaId: A11Y_INTERFACE_SCHEMA});
+        settings.bind(KEY_HIGH_CONTRAST,
+            this, 'checked',
+            Gio.SettingsBindFlags.DEFAULT);
+    }
+});
+
+export const MagnifierToggle = GObject.registerClass(
+class MagnifierToggle extends QuickToggle {
+    constructor() {
+        super({
+            title: _('Zoom'),
+            iconName: 'accessibility-zoom-symbolic',
+            toggleMode: true,
+        });
+
+        const settings = new Gio.Settings({schemaId: APPLICATIONS_SCHEMA});
+        settings.bind('screen-magnifier-enabled',
+            this, 'checked',
+            Gio.SettingsBindFlags.DEFAULT);
+    }
+});
+
+export const LargeTextToggle = GObject.registerClass(
+class LargeTextToggle extends QuickToggle {
+    constructor() {
+        super({
+            title: _('Large Text'),
+            iconName: 'accessibility-large-text-symbolic',
+            toggleMode: true,
+        });
+
+        this._settings = new Gio.Settings({schemaId: DESKTOP_INTERFACE_SCHEMA});
+        this._updateChecked();
+
+        const toggledId = this.connect('notify::checked', () => {
+            if (this.checked)
+                this._settings.set_double(KEY_TEXT_SCALING_FACTOR, DPI_FACTOR_LARGE);
+            else
+                this._settings.reset(KEY_TEXT_SCALING_FACTOR);
+        });
+
+        this._settings.connectObject(`changed::${KEY_TEXT_SCALING_FACTOR}`, () => {
+            this.block_signal_handler(toggledId);
+            this._updateChecked();
+            this.unblock_signal_handler(toggledId);
+        });
+        this._settings.bind_writable(KEY_TEXT_SCALING_FACTOR,
+            this, 'reactive',
+            false);
+    }
+
+    _updateChecked() {
+        const factor = this._settings.get_double(KEY_TEXT_SCALING_FACTOR);
+        const checked = factor > 1.0;
+        this.set({checked});
+    }
+});
+
+export const ScreenReaderToggle = GObject.registerClass(
+class ScreenReaderToggle extends QuickToggle {
+    constructor() {
+        super({
+            title: _('Screen Reader'),
+            iconName: 'accessibility-screen-reader-symbolic',
+            toggleMode: true,
+        });
+
+        const settings = new Gio.Settings({schemaId: APPLICATIONS_SCHEMA});
+        settings.bind('screen-reader-enabled',
+            this, 'checked',
+            Gio.SettingsBindFlags.DEFAULT);
+    }
+});
+
+export const ScreenKeyboardToggle = GObject.registerClass(
+class ScreenKeyboardToggle extends QuickToggle {
+    constructor() {
+        super({
+            title: _('Screen Keyboard'),
+            iconName: 'input-keyboard-symbolic',
+            toggleMode: true,
+        });
+
+        const settings = new Gio.Settings({schemaId: APPLICATIONS_SCHEMA});
+        settings.bind('screen-keyboard-enabled',
+            this, 'checked',
+            Gio.SettingsBindFlags.DEFAULT);
+    }
+});
+
+export const VisualBellToggle = GObject.registerClass(
+class VisualBellToggle extends QuickToggle {
+    constructor() {
+        super({
+            title: _('Visual Alerts'),
+            iconName: 'accessibility-visual-alerts-symbolic',
+            toggleMode: true,
+        });
+
+        const settings = new Gio.Settings({schemaId: WM_SCHEMA});
+        settings.bind(KEY_VISUAL_BELL,
+            this, 'checked',
+            Gio.SettingsBindFlags.DEFAULT);
+    }
+});
+
+export const StickyKeysToggle = GObject.registerClass(
+class StickyKeysToggle extends QuickToggle {
+    constructor() {
+        super({
+            title: _('Sticky Keys'),
+            iconName: 'accessibility-keyboard-keys-symbolic',
+            toggleMode: true,
+        });
+
+        const settings = new Gio.Settings({schemaId: A11Y_KEYBOARD_SCHEMA});
+        settings.bind(KEY_STICKY_KEYS_ENABLED,
+            this, 'checked',
+            Gio.SettingsBindFlags.DEFAULT);
+    }
+});
+
+export const SlowKeysToggle = GObject.registerClass(
+class SlowKeysToggle extends QuickToggle {
+    constructor() {
+        super({
+            title: _('Slow Keys'),
+            iconName: 'accessibility-keyboard-keys-symbolic',
+            toggleMode: true,
+        });
+
+        const settings = new Gio.Settings({schemaId: A11Y_KEYBOARD_SCHEMA});
+        settings.bind(KEY_SLOW_KEYS_ENABLED,
+            this, 'checked',
+            Gio.SettingsBindFlags.DEFAULT);
+    }
+});
+
+export const BounceKeysToggle = GObject.registerClass(
+class BounceKeysToggle extends QuickToggle {
+    constructor() {
+        super({
+            title: _('Bounce Keys'),
+            iconName: 'accessibility-keyboard-keys-symbolic',
+            toggleMode: true,
+        });
+
+        const settings = new Gio.Settings({schemaId: A11Y_KEYBOARD_SCHEMA});
+        settings.bind(KEY_BOUNCE_KEYS_ENABLED,
+            this, 'checked',
+            Gio.SettingsBindFlags.DEFAULT);
+    }
+});
+
+export const MouseKeysToggle = GObject.registerClass(
+class MouseKeysToggle extends QuickToggle {
+    constructor() {
+        super({
+            title: _('Mouse Keys'),
+            iconName: 'accessibility-mouse-keys-symbolic',
+            toggleMode: true,
+        });
+
+        const settings = new Gio.Settings({schemaId: A11Y_KEYBOARD_SCHEMA});
+        settings.bind(KEY_MOUSE_KEYS_ENABLED,
+            this, 'checked',
+            Gio.SettingsBindFlags.DEFAULT);
     }
 });

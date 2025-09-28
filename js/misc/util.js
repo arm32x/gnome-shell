@@ -20,7 +20,7 @@ const _urlRegexp = new RegExp(
             '|' +
             'www\\d{0,3}[.]' +                    // www.
             '|' +
-            '[a-z0-9.\\-]+[.][a-z]{2,4}/' +       // foo.xx/
+            '([a-z0-9\\-]+[.])+[a-z]{2,4}/' +     // foo.xx/
         ')' +
         '(?:' +                                   // one or more:
             '[^\\s()<>]+' +                       // run of non-space non-()
@@ -193,7 +193,7 @@ export function fixMarkup(text, allowMarkup) {
         try {
             Pango.parse_markup(_text, -1, '');
             return _text;
-        } catch (e) {}
+        } catch {}
     }
 
     // !allowMarkup, or invalid markup

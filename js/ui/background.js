@@ -503,7 +503,7 @@ const Background = GObject.registerClass({
                 Gio.FileQueryInfoFlags.NONE,
                 0,
                 this._cancellable);
-        } catch (e) {
+        } catch {
             this._setLoaded();
             return;
         }
@@ -661,7 +661,6 @@ class Animation extends GnomeBG.BGSlideShow {
         this.loaded = false;
     }
 
-    // eslint-disable-next-line camelcase
     load_async(cancellable, callback) {
         super.load_async(cancellable, () => {
             this.loaded = true;

@@ -16,6 +16,9 @@ import * as MessageTray from './messageTray.js';
 import * as SwipeTracker from './swipeTracker.js';
 import {formatDateWithCFormatString} from '../misc/dateUtils.js';
 import * as AuthPrompt from '../gdm/authPrompt.js';
+import {AuthPromptStatus} from '../gdm/authPrompt.js';
+import {MprisSource} from './mpris.js';
+import {MediaMessage} from './messageList.js';
 
 // The timeout before going back automatically to the lock screen (in seconds)
 const IDLE_TIMEOUT = 2 * 60;
@@ -49,6 +52,16 @@ const NotificationsBox = GObject.registerClass({
         });
         this.add_child(this._scrollView);
 
+        this._players = new Map();
+        this._mediaSource = new MprisSource();
+        this._mediaSource.connectObject(
+            'player-added', (o, player) => this._addPlayer(player),
+            'player-removed', (o, player) => this._removePlayer(player),
+            this);
+        this._mediaSource.players.forEach(player => {
+            this._addPlayer(player);
+        });
+
         this._settings = new Gio.Settings({
             schema_id: 'org.gnome.desktop.notifications',
         });
@@ -69,6 +82,9 @@ const NotificationsBox = GObject.registerClass({
         let items = this._sources.entries();
         for (let [source, obj] of items)
             this._removeSource(source, obj);
+
+        for (const player of this._players.keys())
+            this._removePlayer(player);
     }
 
     _updateVisibility() {
@@ -202,6 +218,20 @@ const NotificationsBox = GObject.registerClass({
             this.emit('wake-up-screen');
     }
 
+    _addPlayer(player) {
+        const message = new MediaMessage(player);
+        this._players.set(player, message);
+        this._notificationBox.insert_child_at_index(message, 0);
+        this._updateVisibility();
+    }
+
+    _removePlayer(player) {
+        const message = this._players.get(player);
+        this._players.delete(player);
+        message.destroy();
+        this._updateVisibility();
+    }
+
     _sourceAdded(tray, source, initial) {
         let obj = {
             visible: source.policy.showInLockScreen,
@@ -217,7 +247,7 @@ const NotificationsBox = GObject.registerClass({
             x_expand: true,
         });
         this._showSource(source, obj, obj.sourceBox);
-        this._notificationBox.add_child(obj.sourceBox);
+        this._notificationBox.insert_child_at_index(obj.sourceBox, this._players.size);
 
         source.connectObject(
             'notify::count', () => this._countChanged(source, obj),
@@ -499,7 +529,7 @@ export const UnlockDialog = GObject.registerClass({
             this._gdmClient.set_enabled_extensions([
                 Gdm.UserVerifierChoiceList.interface_info().name,
             ]);
-        } catch (e) {
+        } catch {
         }
 
         this._adjustment = new St.Adjustment({
@@ -515,7 +545,10 @@ export const UnlockDialog = GObject.registerClass({
 
         this._swipeTracker = new SwipeTracker.SwipeTracker(this,
             Clutter.Orientation.VERTICAL,
-            Shell.ActionMode.UNLOCK_SCREEN);
+            Shell.ActionMode.UNLOCK_SCREEN,
+            {
+                name: 'UnlockDialog swipe tracker',
+            });
         this._swipeTracker.connect('begin', this._swipeBegin.bind(this));
         this._swipeTracker.connect('update', this._swipeUpdate.bind(this));
         this._swipeTracker.connect('end', this._swipeEnd.bind(this));
@@ -534,9 +567,9 @@ export const UnlockDialog = GObject.registerClass({
 
         this._activePage = null;
 
-        let tapAction = new Clutter.TapAction();
-        tapAction.connect('tap', this._showPrompt.bind(this));
-        this.add_action(tapAction);
+        const clickGesture = new Clutter.ClickGesture();
+        clickGesture.connect('recognize', () => this._showPrompt());
+        this.add_action(clickGesture);
 
         // Background
         this._backgroundGroup = new Clutter.Actor();
@@ -715,8 +748,15 @@ export const UnlockDialog = GObject.registerClass({
             this._promptBox.add_child(this._authPrompt);
         }
 
-        this._authPrompt.reset();
-        this._authPrompt.updateSensitivity(true);
+        const {verificationStatus} = this._authPrompt;
+        switch (verificationStatus) {
+        case AuthPromptStatus.NOT_VERIFYING:
+        case AuthPromptStatus.VERIFICATION_CANCELLED:
+        case AuthPromptStatus.VERIFICATION_FAILED:
+            this._authPrompt.reset();
+            this._authPrompt.updateSensitivity(
+                verificationStatus === AuthPromptStatus.NOT_VERIFYING);
+        }
     }
 
     _maybeDestroyAuthPrompt() {

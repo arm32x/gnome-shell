@@ -23,6 +23,7 @@ $system_fg_color: $fg_color;
 // panel colors
 $panel_bg_color: if($variant == 'light', $_base_color_light, $system_base_color);
 $panel_fg_color: if($variant == 'light', $_base_color_dark, $fg_color);
+$panel_border_color: if($variant == 'light', transparentize($_base_color_dark, .9), transparent);
 
 // card elements
 $card_bg_color: if($variant == 'light', $light_1, $everforest_legacy_bg1);
@@ -45,7 +46,7 @@ $osd_outer_borders_color: $everforest_legacy_bg1;
 // system colors
 $system_bg_color: $everforest_legacy_bg0;
 $system_borders_color: $everforest_legacy_bg1;
-$system_insensitive_fg_color: mix($system_fg_color, $system_bg_color, 50%);
+$system_insensitive_fg_color: mix($system_bg_color, $system_fg_color, 37%);
 $system_overlay_bg_color: $everforest_legacy_bg0; // for non-transparent items, e.g. dash
                                                   // only appears in overview, so won't conflict with $system_bg_color
 
