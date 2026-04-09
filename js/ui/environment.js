@@ -17,6 +17,9 @@ import St from 'gi://St';
 
 import * as SignalTracker from '../misc/signalTracker.js';
 import {adjustAnimationTime} from '../misc/animationUtils.js';
+import {logErrorUnlessCancelled} from '../misc/errorUtils.js';
+
+const sessionSignalHolder = new SignalTracker.TransientSignalHolder();
 
 setConsoleLogDomain('GNOME Shell');
 
@@ -31,7 +34,6 @@ Gio._promisify(Gio.File.prototype, 'query_info_async');
 Gio._promisify(Polkit.Permission, 'new');
 Gio._promisify(Shell.App.prototype, 'activate_action');
 Gio._promisify(Meta.Backend.prototype, 'set_keymap_async');
-Gio._promisify(Meta.Backend.prototype, 'set_keymap_layout_group_async');
 
 // We can't import shell JS modules yet, because they may have
 // variable initializations, etc, that depend on this file's
@@ -41,9 +43,9 @@ function _patchLayoutClass(layoutClass, styleProps) {
     if (styleProps) {
         layoutClass.prototype.hookup_style = function (container) {
             container.connect('style-changed', () => {
-                let node = container.get_theme_node();
-                for (let prop in styleProps) {
-                    let [found, length] = node.lookup_length(styleProps[prop], false);
+                const node = container.get_theme_node();
+                for (const prop in styleProps) {
+                    const [found, length] = node.lookup_length(styleProps[prop], false);
                     if (found)
                         this[prop] = length;
                 }
@@ -53,27 +55,53 @@ function _patchLayoutClass(layoutClass, styleProps) {
 }
 
 function _makeEaseCallback(params, cleanup) {
-    let onComplete = params.onComplete;
+    const onComplete = params.onComplete;
     delete params.onComplete;
 
-    let onStopped = params.onStopped;
+    const onStopped = params.onStopped;
     delete params.onStopped;
 
-    return isFinished => {
-        cleanup();
+    const {promise, resolve, reject} = Promise.withResolvers();
+    const callback = isFinished => {
+        cleanup?.();
 
         if (onStopped)
             onStopped(isFinished);
         if (onComplete && isFinished)
             onComplete();
+
+        if (isFinished) {
+            resolve();
+        } else {
+            reject(new GLib.Error(Gio.IOErrorEnum,
+                Gio.IOErrorEnum.CANCELLED, 'Transition was stopped before completing'));
+        }
     };
+
+    return {promise, callback};
+}
+
+function _makeEasePrepareAndCleanup(duration) {
+    if (!duration)
+        return {prepare: null, cleanup: null};
+
+    const prepare = () => {
+        global.compositor.disable_unredirect();
+        global.begin_work();
+    };
+    const cleanup = () => {
+        global.compositor.enable_unredirect();
+        global.end_work();
+    };
+
+    return {prepare, cleanup};
 }
 
 function _getPropertyTarget(actor, propName) {
     if (!propName.startsWith('@'))
         return [actor, propName];
 
-    let [type, name, prop] = propName.split('.');
+    const [type, name, prop] = propName.split('.');
     switch (type) {
     case '@layout':
         return [actor.layout_manager, name];
@@ -103,8 +131,8 @@ function _easeActor(actor, params) {
     const animationRequired = params.animationRequired;
     delete params.animationRequired;
 
-    if (params.duration !== undefined)
-        actor.set_easing_duration(params.duration, {animationRequired});
+    const duration = params.duration ?? actor.get_easing_duration();
+    actor.set_easing_duration(duration, {animationRequired});
     delete params.duration;
 
     if (params.delay !== undefined)
@@ -126,21 +154,15 @@ function _easeActor(actor, params) {
         actor.set_easing_mode(params.mode);
     delete params.mode;
 
-    const prepare = () => {
-        global.compositor.disable_unredirect();
-        global.begin_work();
-    };
-    const cleanup = () => {
-        global.compositor.enable_unredirect();
-        global.end_work();
-    };
-    let callback = _makeEaseCallback(params, cleanup);
+    const easingDuration = actor.get_easing_duration();
+    const {prepare, cleanup} = _makeEasePrepareAndCleanup(easingDuration);
+    const {promise, callback} = _makeEaseCallback(params, cleanup);
 
     // cancel overwritten transitions
-    let animatedProps = Object.keys(params).map(p => p.replace('_', '-', 'g'));
+    const animatedProps = Object.keys(params).map(p => p.replaceAll('_', '-'));
     animatedProps.forEach(p => actor.remove_transition(p));
 
-    if (actor.get_easing_duration() > 0 || !isReversed)
+    if (easingDuration > 0 || !isReversed)
         actor.set(params);
     actor.restore_easing_state();
 
@@ -152,18 +174,24 @@ function _easeActor(actor, params) {
 
     const [transition] = transitions;
 
-    if (transition && transition.delay)
-        transition.connect('started', () => prepare());
-    else
-        prepare();
+    if (prepare) {
+        if (transition?.delay)
+            transition.connectObject('started', () => prepare(), sessionSignalHolder);
+        else
+            prepare();
+    }
 
-    if (transition)
-        transition.connect('stopped', (t, finished) => callback(finished));
-    else
+    if (transition) {
+        transition.connectObject('stopped', (t, finished) => callback(finished),
+            sessionSignalHolder);
+    } else {
         callback(true);
+    }
+
+    return promise;
 }
 
-function _easeActorProperty(actor, propName, target, params) {
+function _easeAnimatableProperty(animatable, propName, target, params) {
     params = {
         repeatCount: 0,
         autoReverse: false,
@@ -197,38 +225,34 @@ function _easeActorProperty(actor, propName, target, params) {
     // whether the transition should finish where it started
     const isReversed = autoReverse && numIterations % 2 === 0;
 
+    // The object is a Clutter.Animatable.
+    const actor = animatable.get_actor();
+
     // Copy Clutter's behavior for implicit animations, see
     // should_skip_implicit_transition()
-    if (actor instanceof Clutter.Actor && !actor.mapped)
+    if (!actor?.mapped)
         duration = 0;
 
-    const prepare = () => {
-        global.compositor.disable_unredirect();
-        global.begin_work();
-    };
-    const cleanup = () => {
-        global.compositor.enable_unredirect();
-        global.end_work();
-    };
-    let callback = _makeEaseCallback(params, cleanup);
+    const {prepare, cleanup} = _makeEasePrepareAndCleanup(duration);
+    const {promise, callback} = _makeEaseCallback(params, cleanup);
 
     // cancel overwritten transition
-    actor.remove_transition(propName);
+    animatable.remove_transition(propName);
 
     if (duration === 0) {
-        let [obj, prop] = _getPropertyTarget(actor, propName);
+        const [obj, prop] = _getPropertyTarget(animatable, propName);
 
         if (!isReversed)
             obj[prop] = target;
 
-        prepare();
+        prepare?.();
         callback(true);
 
-        return;
+        return promise;
     }
 
-    let pspec = actor.find_property(propName);
-    let transition = new Clutter.PropertyTransition({
+    const pspec = animatable.find_property(propName);
+    const transition = new Clutter.PropertyTransition({
         property_name: propName,
         interval: new Clutter.Interval({value_type: pspec.value_type}),
         remove_on_complete: true,
@@ -236,16 +260,20 @@ function _easeActorProperty(actor, propName, target, params) {
         auto_reverse: autoReverse,
         ...params,
     });
-    actor.add_transition(propName, transition);
+    animatable.add_transition(propName, transition);
 
     transition.set_to(target);
 
-    if (transition.delay)
-        transition.connect('started', () => prepare());
-    else
-        prepare();
+    if (prepare) {
+        if (transition.delay)
+            transition.connectObject('started', () => prepare(), sessionSignalHolder);
+        else
+            prepare();
+    }
 
-    transition.connect('stopped', (t, finished) => callback(finished));
+    transition.connectObject('stopped',
+        (t, finished) => callback(finished), sessionSignalHolder);
+    return promise;
 }
 
 // Add some bindings to the global JS namespace
@@ -272,6 +300,9 @@ GObject.Object.prototype.disconnect_object = function (...args) {
 };
 
 SignalTracker.registerDestroyableType(Clutter.Actor);
+
+global.connectObject('shutdown', () => sessionSignalHolder.destroy(),
+    sessionSignalHolder);
 
 Cairo.Context.prototype.setSourceColor = function (color) {
     const {red, green, blue, alpha} = color;
@@ -300,15 +331,27 @@ Clutter.Actor.prototype.set_easing_delay = function (msecs, params = {}) {
 };
 
 Clutter.Actor.prototype.ease = function (props) {
-    _easeActor(this, props);
+    _easeActor(this, props).catch(logErrorUnlessCancelled);
 };
 Clutter.Actor.prototype.ease_property = function (propName, target, params) {
-    _easeActorProperty(this, propName, target, params);
+    _easeAnimatableProperty(this, propName, target, params).catch(logErrorUnlessCancelled);
 };
 St.Adjustment.prototype.ease = function (target, params) {
     // we're not an actor of course, but we implement the same
     // transition API as Clutter.Actor, so this works anyway
-    _easeActorProperty(this, 'value', target, params);
+    _easeAnimatableProperty(this, 'value', target, params).catch(logErrorUnlessCancelled);
+};
+
+Clutter.Actor.prototype.easeAsync = async function (props) {
+    await _easeActor(this, props);
+};
+Clutter.Actor.prototype.ease_property_async = async function (propName, target, params) {
+    await _easeAnimatableProperty(this, propName, target, params);
+};
+St.Adjustment.prototype.easeAsync = async function (target, params) {
+    // we're not an actor of course, but we implement the same
+    // transition API as Clutter.Actor, so this works anyway
+    await _easeAnimatableProperty(this, 'value', target, params).catch(() => {});
 };
 
 Clutter.Actor.prototype[Symbol.iterator] = function* () {
@@ -329,7 +372,7 @@ Gio.File.prototype.touch_finish = function (result) {
 
 const origToString = Object.prototype.toString;
 Object.prototype.toString = function () {
-    let base = origToString.call(this);
+    const base = origToString.call(this);
     try {
         if ('actor' in this && this.actor instanceof Clutter.Actor)
             return base.replace(/\]$/, ` delegate for ${this.actor.toString().substring(1)}`);
@@ -342,7 +385,7 @@ Object.prototype.toString = function () {
 
 const slowdownEnv = GLib.getenv('GNOME_SHELL_SLOWDOWN_FACTOR');
 if (slowdownEnv) {
-    let factor = parseFloat(slowdownEnv);
+    const factor = parseFloat(slowdownEnv);
     if (!isNaN(factor) && factor > 0.0)
         St.Settings.get().slow_down_factor = factor;
 }

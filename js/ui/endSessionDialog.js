@@ -21,7 +21,6 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
-import Polkit from 'gi://Polkit';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import UPower from 'gi://UPowerGlib';
@@ -124,31 +123,11 @@ const restartUpdateDialogContent = {
     showOtherSessions: true,
 };
 
-const restartUpgradeDialogContent = {
-
-    subject: C_('title', 'Restart & Install Upgrade'),
-    upgradeDescription(distroName, distroVersion) {
-        /* Translators: This is the text displayed for system upgrades in the
-           shut down dialog. First %s gets replaced with the distro name and
-           second %s with the distro version to upgrade to */
-        return _('%s %s will be installed after restart. Upgrade installation can take a long time: ensure that you have backed up and that the computer is plugged in.').format(distroName, distroVersion);
-    },
-    disableTimer: true,
-    showBatteryWarning: false,
-    confirmButtons: [{
-        signal: 'ConfirmedReboot',
-        label: C_('button', 'Restart & Install'),
-    }],
-    iconName: 'view-refresh-symbolic',
-    showOtherSessions: true,
-};
-
 const DialogType = {
     LOGOUT: 0 /* GSM_SHELL_END_SESSION_DIALOG_TYPE_LOGOUT */,
     SHUTDOWN: 1 /* GSM_SHELL_END_SESSION_DIALOG_TYPE_SHUTDOWN */,
     RESTART: 2 /* GSM_SHELL_END_SESSION_DIALOG_TYPE_RESTART */,
     UPDATE_RESTART: 3,
-    UPGRADE_RESTART: 4,
 };
 
 const DialogContent = {
@@ -156,7 +135,6 @@ const DialogContent = {
     1 /* DialogType.SHUTDOWN */: shutdownDialogContent,
     2 /* DialogType.RESTART */: restartDialogContent,
     3 /* DialogType.UPDATE_RESTART */: restartUpdateDialogContent,
-    4 /* DialogType.UPGRADE_RESTART */: restartUpgradeDialogContent,
 };
 
 const MAX_USERS_IN_SESSION_DIALOG = 5;
@@ -164,8 +142,10 @@ const MAX_USERS_IN_SESSION_DIALOG = 5;
 const LogindSessionIface = loadInterfaceXML('org.freedesktop.login1.Session');
 const LogindSession = Gio.DBusProxy.makeProxyWrapper(LogindSessionIface);
 
-const PkOfflineIface = loadInterfaceXML('org.freedesktop.PackageKit.Offline');
-const PkOfflineProxy = Gio.DBusProxy.makeProxyWrapper(PkOfflineIface);
+const OFFLINE_UPDATE_ACTION_REBOOT = 'reboot';
+const OFFLINE_UPDATE_ACTION_SHUTDOWN = 'shutdown';
+const SoftwareOfflineUpdatesIface = loadInterfaceXML('org.gnome.Software.OfflineUpdates');
+const SoftwareOfflineUpdatesProxy = Gio.DBusProxy.makeProxyWrapper(SoftwareOfflineUpdatesIface);
 
 const UPowerIface = loadInterfaceXML('org.freedesktop.UPower.Device');
 const UPowerProxy = Gio.DBusProxy.makeProxyWrapper(UPowerIface);
@@ -213,7 +193,7 @@ function _roundSecondsToInterval(totalSeconds, secondsLeft, interval) {
 }
 
 function _setCheckBoxLabel(checkBox, text) {
-    let label = checkBox.getLabelActor();
+    const label = checkBox.getLabelActor();
 
     if (text) {
         label.set_text(text);
@@ -238,12 +218,11 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
 
         this._userManager = AccountsService.UserManager.get_default();
         this._user = this._userManager.get_user(GLib.get_user_name());
-        this._updatesPermission = null;
 
-        this._pkOfflineProxy = new PkOfflineProxy(Gio.DBus.system,
-            'org.freedesktop.PackageKit',
-            '/org/freedesktop/PackageKit',
-            this._onPkOfflineProxyCreated.bind(this));
+        // open the gnome-software proxy only when the dialog is opening,
+        // to avoid early start of the gnome-software, which is delayed by
+        // its systemd file, to not use too many resources right after login
+        this._softwareOfflineUpdatesProxy = null;
 
         this._powerProxy = new UPowerProxy(Gio.DBus.system,
             'org.freedesktop.UPower',
@@ -307,26 +286,21 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
         this._canRebootToBootLoaderMenu = canRebootToBootLoaderMenu;
     }
 
-    async _onPkOfflineProxyCreated(proxy, error) {
-        if (error) {
-            log(error.message);
+    async _ensureSoftwareOfflineUpdatesProxy() {
+        if (this._softwareOfflineUpdatesProxy !== null)
             return;
-        }
 
-        // Creating a D-Bus proxy won't propagate SERVICE_UNKNOWN or NAME_HAS_NO_OWNER
-        // errors if PackageKit is not available, but the GIO implementation will make
-        // sure in that case that the proxy's g-name-owner is set to null, so check that.
-        if (this._pkOfflineProxy.g_name_owner === null) {
-            this._pkOfflineProxy = null;
-            return;
-        }
-
-        // It only makes sense to check for this permission if PackageKit is available.
         try {
-            this._updatesPermission = await Polkit.Permission.new(
-                'org.freedesktop.packagekit.trigger-offline-update', null, null);
-        } catch (e) {
-            log(`No permission to trigger offline updates: ${e}`);
+            this._softwareOfflineUpdatesProxy = await SoftwareOfflineUpdatesProxy.newAsync(
+                Gio.DBus.session, 'org.gnome.Software', '/org/gnome/Software/OfflineUpdates');
+
+            // Creating a D-Bus proxy won't propagate SERVICE_UNKNOWN or NAME_HAS_NO_OWNER
+            // errors if gnome-software is not available, but the GIO implementation will make
+            // sure in that case that the proxy's g-name-owner is set to null, so check that.
+            if (this._softwareOfflineUpdatesProxy.g_name_owner === null)
+                this._softwareOfflineUpdatesProxy = null;
+        } catch (error) {
+            log(error.message);
         }
     }
 
@@ -350,18 +324,16 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
         if (this._checkBox.checked)
             return true;
 
-        // Show the warning if updates have already been triggered, but
-        // the user doesn't have enough permissions to cancel them.
-        let updatesAllowed = this._updatesPermission && this._updatesPermission.allowed;
-        return this._updateInfo.UpdatePrepared && this._updateInfo.UpdateTriggered && !updatesAllowed;
+        // Show the warning if updates have already been triggered.
+        return this._updateScheduled;
     }
 
     _sync() {
-        let open = this.state === ModalDialog.State.OPENING || this.state === ModalDialog.State.OPENED;
+        const open = this.state === ModalDialog.State.OPENING || this.state === ModalDialog.State.OPENED;
         if (!open)
             return;
 
-        let dialogContent = DialogContent[this._type];
+        const dialogContent = DialogContent[this._type];
 
         let subject = dialogContent.subject;
 
@@ -372,11 +344,11 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
         this._batteryWarning.visible = this._shouldShowLowBatteryWarning(dialogContent);
 
         let description;
-        let displayTime = _roundSecondsToInterval(
+        const displayTime = _roundSecondsToInterval(
             this._totalSecondsToStayOpen, this._secondsLeft, 10);
 
         if (this._user.is_loaded) {
-            let realName = this._user.get_real_name();
+            const realName = this._user.get_real_name();
 
             if (realName != null) {
                 if (dialogContent.subjectWithUser)
@@ -387,14 +359,6 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
             }
         }
 
-        // Use a different description when we are installing a system upgrade
-        // if the PackageKit proxy is available (i.e. PackageKit is available).
-        if (dialogContent.upgradeDescription) {
-            const {name, version} = this._updateInfo.PreparedUpgrade;
-            if (name != null && version != null)
-                description = dialogContent.upgradeDescription(name, version);
-        }
-
         // Fall back to regular description
         if (!description)
             description = dialogContent.description(displayTime);
@@ -402,8 +366,8 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
         this._messageDialogContent.title = subject;
         this._messageDialogContent.description = description;
 
-        let hasApplications = this._applications.length > 0;
-        let hasSessions = this._sessions.length > 0;
+        const hasApplications = this._applications.length > 0;
+        const hasSessions = this._sessions.length > 0;
 
         this._applicationSection.visible = hasApplications;
         this._sessionSection.visible = hasSessions;
@@ -412,11 +376,11 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
     _onCapturedEvent(actor, event) {
         let altEnabled = false;
 
-        let type = event.type();
+        const type = event.type();
         if (type !== Clutter.EventType.KEY_PRESS && type !== Clutter.EventType.KEY_RELEASE)
             return Clutter.EVENT_PROPAGATE;
 
-        let key = event.get_key_symbol();
+        const key = event.get_key_symbol();
         if (key !== Clutter.KEY_Alt_L && key !== Clutter.KEY_Alt_R)
             return Clutter.EVENT_PROPAGATE;
 
@@ -438,13 +402,13 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
             key: Clutter.KEY_Escape,
         });
 
-        let dialogContent = DialogContent[this._type];
+        const dialogContent = DialogContent[this._type];
         for (let i = 0; i < dialogContent.confirmButtons.length; i++) {
-            let signal = dialogContent.confirmButtons[i].signal;
-            let label = dialogContent.confirmButtons[i].label;
-            let button = this.addButton({
+            const signal = dialogContent.confirmButtons[i].signal;
+            const label = dialogContent.confirmButtons[i].label;
+            const button = this.addButton({
                 action: () => {
-                    let signalId = this.connect('closed', () => {
+                    const signalId = this.connect('closed', () => {
                         this.disconnect(signalId);
                         this._confirm(signal).catch(logError);
                     });
@@ -459,7 +423,7 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
                 this._rebootButtonAlt = this.addButton({
                     action: () => {
                         this.close(true);
-                        let signalId = this.connect('closed', () => {
+                        const signalId = this.connect('closed', () => {
                             this.disconnect(signalId);
                             this._confirmRebootToBootLoaderMenu();
                         });
@@ -507,14 +471,19 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
             if (this._checkBox.checked) {
                 switch (signal) {
                 case 'ConfirmedReboot':
-                    await this._triggerOfflineUpdateReboot();
+                    await this._setPostUpdateAction(OFFLINE_UPDATE_ACTION_REBOOT);
                     break;
                 case 'ConfirmedShutdown':
-                    // To actually trigger the offline update, we need to
-                    // reboot to do the upgrade. When the upgrade is complete,
-                    // the computer will shut down automatically.
-                    signal = 'ConfirmedReboot';
-                    await this._triggerOfflineUpdateShutdown();
+                    // The app may not necessarily require reboot to apply the updates,
+                    // thus do that only if the action was changed; it may fail to set
+                    // the action too, then the right way is to shutdown, not reboot
+                    if (await this._setPostUpdateAction(OFFLINE_UPDATE_ACTION_SHUTDOWN)) {
+                        // The app supports changing action after the offline updates
+                        // are applied, thus reboot now, to apply the offline updates
+                        // immediately and the app with shutdown the computer for us
+                        // when the update is finished.
+                        signal = 'ConfirmedReboot';
+                    }
                     break;
                 default:
                     break;
@@ -534,49 +503,43 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
         this._sync();
     }
 
-    async _triggerOfflineUpdateReboot() {
-        // Handle this gracefully if PackageKit is not available.
-        if (!this._pkOfflineProxy)
-            return;
+    async _setPostUpdateAction(action) {
+        // Handle this gracefully if gnome-software is not available.
+        if (!this._softwareOfflineUpdatesProxy)
+            return false;
 
+        let actionChanged = false;
         try {
-            await this._pkOfflineProxy.TriggerAsync('reboot');
+            await this._softwareOfflineUpdatesProxy.SetActionAsync(action);
+            actionChanged = true;
         } catch (error) {
-            log(error.message);
+            // Not all implementations can change the action after the update is applied;
+            // it's indicated by returning the "not-supported" error by the gnome-software
+            if (!error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_SUPPORTED))
+                console.log(error.message);
         }
-    }
-
-    async _triggerOfflineUpdateShutdown() {
-        // Handle this gracefully if PackageKit is not available.
-        if (!this._pkOfflineProxy)
-            return;
-
-        try {
-            await this._pkOfflineProxy.TriggerAsync('power-off');
-        } catch (error) {
-            log(error.message);
-        }
+        return actionChanged;
     }
 
     async _triggerOfflineUpdateCancel() {
-        // Handle this gracefully if PackageKit is not available.
-        if (!this._pkOfflineProxy)
+        // Handle this gracefully if gnome-software is not available.
+        if (!this._softwareOfflineUpdatesProxy)
             return;
 
         try {
-            await this._pkOfflineProxy.CancelAsync();
+            await this._softwareOfflineUpdatesProxy.CancelAsync();
         } catch (error) {
             log(error.message);
         }
     }
 
     _startTimer() {
-        let startTime = GLib.get_monotonic_time();
+        const startTime = GLib.get_monotonic_time();
         this._secondsLeft = this._totalSecondsToStayOpen;
 
         this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
-            let currentTime = GLib.get_monotonic_time();
-            let secondsElapsed = (currentTime - startTime) / 1000000;
+            const currentTime = GLib.get_monotonic_time();
+            const secondsElapsed = (currentTime - startTime) / 1000000;
 
             this._secondsLeft = this._totalSecondsToStayOpen - secondsElapsed;
             if (this._secondsLeft > 0) {
@@ -584,8 +547,8 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
                 return GLib.SOURCE_CONTINUE;
             }
 
-            let dialogContent = DialogContent[this._type];
-            let button = dialogContent.confirmButtons[dialogContent.confirmButtons.length - 1];
+            const dialogContent = DialogContent[this._type];
+            const button = dialogContent.confirmButtons[dialogContent.confirmButtons.length - 1];
             this._confirm(button.signal).catch(logError);
             this._timerId = 0;
 
@@ -609,12 +572,12 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
             return;
         }
 
-        let app = findAppFromInhibitor(inhibitor);
+        const app = findAppFromInhibitor(inhibitor);
         const [flags] = app ? inhibitor.GetFlagsSync() : [0];
 
         if (app && flags & GnomeSession.InhibitFlags.LOGOUT) {
-            let [description] = inhibitor.GetReasonSync();
-            let listItem = new Dialog.ListSectionItem({
+            const [description] = inhibitor.GetReasonSync();
+            const listItem = new Dialog.ListSectionItem({
                 icon_actor: app.create_icon_texture(_ITEM_ICON_SIZE),
                 title: app.get_name(),
                 description,
@@ -639,7 +602,7 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
 
         const sessions = await this._loginManager.listSessions();
         for (const [id_, uid_, userName, seat_, sessionPath] of sessions) {
-            let proxy = new LogindSession(Gio.DBus.system, 'org.freedesktop.login1', sessionPath);
+            const proxy = new LogindSession(Gio.DBus.system, 'org.freedesktop.login1', sessionPath);
 
             if (proxy.Class !== 'user')
                 continue;
@@ -658,7 +621,7 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
             };
             const nSessions = this._sessions.push(session);
 
-            let userAvatar = new UserWidget.Avatar(session.user, {
+            const userAvatar = new UserWidget.Avatar(session.user, {
                 iconSize: _ITEM_ICON_SIZE,
             });
             userAvatar.update();
@@ -676,7 +639,7 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
             else
                 userLabelText = userName;
 
-            let listItem = new Dialog.ListSectionItem({
+            const listItem = new Dialog.ListSectionItem({
                 icon_actor: userAvatar,
                 title: userLabelText,
             });
@@ -690,47 +653,33 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
         this._sync();
     }
 
-    async _getUpdateInfo() {
-        const connection = this._pkOfflineProxy.get_connection();
-        const reply = await connection.call(
-            this._pkOfflineProxy.g_name,
-            this._pkOfflineProxy.g_object_path,
-            'org.freedesktop.DBus.Properties',
-            'GetAll',
-            new GLib.Variant('(s)', [this._pkOfflineProxy.g_interface_name]),
-            null,
-            Gio.DBusCallFlags.NONE,
-            -1,
-            null);
-        const [info] = reply.recursiveUnpack();
-        return info;
+    async _getUpdateState() {
+        await this._ensureSoftwareOfflineUpdatesProxy();
+        if (this._softwareOfflineUpdatesProxy === null)
+            return 'unknown';
+        const [state] = await this._softwareOfflineUpdatesProxy.GetStateAsync();
+        return state;
     }
 
     async OpenAsync(parameters, invocation) {
-        let [type, timestamp_, totalSecondsToStayOpen, inhibitorObjectPaths] = parameters;
+        const [type, timestamp_, totalSecondsToStayOpen, inhibitorObjectPaths] = parameters;
         this._totalSecondsToStayOpen = totalSecondsToStayOpen;
         this._type = type;
 
         try {
-            this._updateInfo = await this._getUpdateInfo();
+            const state = await this._getUpdateState();
+            this._updateScheduled = state === 'scheduled';
         } catch (e) {
-            if (this._pkOfflineProxy !== null)
-                log(`Failed to get update info from PackageKit: ${e.message}`);
+            if (this._softwareOfflineUpdatesProxy !== null)
+                log(`Failed to get update info from gnome-software: ${e.message}`);
 
-            this._updateInfo = {
-                UpdateTriggered: false,
-                UpdatePrepared: false,
-                UpgradeTriggered: false,
-                PreparedUpgrade: {},
-            };
+            this._updateScheduled = false;
         }
 
-        // Only consider updates and upgrades if PackageKit is available.
-        if (this._pkOfflineProxy && this._type === DialogType.RESTART) {
-            if (this._updateInfo.UpdateTriggered)
+        // Only consider updates if gnome-software is available.
+        if (this._softwareOfflineUpdatesProxy && this._type === DialogType.RESTART) {
+            if (this._updateScheduled)
                 this._type = DialogType.UPDATE_RESTART;
-            else if (this._updateInfo.UpgradeTriggered)
-                this._type = DialogType.UPGRADE_RESTART;
         }
 
         this._applications = [];
@@ -746,10 +695,10 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
             return;
         }
 
-        let dialogContent = DialogContent[this._type];
+        const dialogContent = DialogContent[this._type];
 
         for (let i = 0; i < inhibitorObjectPaths.length; i++) {
-            let inhibitor = new GnomeSession.Inhibitor(inhibitorObjectPaths[i], proxy => {
+            const inhibitor = new GnomeSession.Inhibitor(inhibitorObjectPaths[i], proxy => {
                 this._onInhibitorLoaded(proxy);
             });
 
@@ -759,22 +708,17 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
         if (dialogContent.showOtherSessions)
             this._loadSessions().catch(logError);
 
-        let updatesAllowed = this._updatesPermission && this._updatesPermission.allowed;
-
         _setCheckBoxLabel(this._checkBox, dialogContent.checkBoxText || '');
-        this._checkBox.visible = dialogContent.checkBoxText && this._updateInfo.UpdatePrepared && updatesAllowed;
+        this._checkBox.visible = dialogContent.checkBoxText && this._updateScheduled;
 
-        if (this._type === DialogType.UPGRADE_RESTART)
-            this._checkBox.checked = this._checkBox.visible && this._updateInfo.UpdateTriggered && !this._isDischargingBattery();
-        else
-            this._checkBox.checked = this._checkBox.visible && !this._isBatteryLow();
+        this._checkBox.checked = this._checkBox.visible && !this._isBatteryLow();
 
         this._batteryWarning.visible = this._shouldShowLowBatteryWarning(dialogContent);
 
         this._updateButtons();
 
         if (!this.open()) {
-            invocation.return_error_literal(
+            invocation.return_error_literal(ModalDialogErrors,
                 ModalDialogError.GRAB_FAILED,
                 'Cannot grab pointer and keyboard');
             return;
@@ -785,10 +729,7 @@ class EndSessionDialog extends ModalDialog.ModalDialog {
 
         this._sync();
 
-        let signalId = this.connect('opened', () => {
-            invocation.return_value(null);
-            this.disconnect(signalId);
-        });
+        invocation.return_value(null);
     }
 
     Close(_parameters, _invocation) {

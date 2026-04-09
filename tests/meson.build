@@ -30,6 +30,7 @@ unit_testenv.append('GI_TYPELIB_PATH', st_typelib_path, separator: ':')
 
 unit_tests = {
   'breakManager': {},
+  'errorUtils': {},
   'extensionUtils': {},
   'fileUtils': {
     'env': {
@@ -76,10 +77,16 @@ endforeach
 
 shell_tests = [
   {
+    'name': 'minimal',
+  },
+  {
     'name': 'basic',
   },
   {
     'name': 'closeWithActiveWindows',
+  },
+  {
+    'name': 'multiMonitor',
   },
   {
     'name': 'headlessStart',
@@ -121,7 +128,6 @@ foreach shell_test : shell_tests
       gnome_shell_perf_helper,
       tests_dependencies,
     ],
-    is_parallel: false,
     env: shell_testenv,
   )
 endforeach

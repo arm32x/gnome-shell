@@ -8,7 +8,7 @@ include:
     ref: '057b052e682d8e5a20c1eb2dd60d5b87d2b56856'
   - project: 'Infrastructure/freedesktop-ci-templates'
     file: 'templates/ci-fairy.yml'
-    ref: 'bc70242ffb8402243e934659ecc1a2d1c89eca2b'
+    ref: 'aec7a6ce7bb38902c70641526f6611e27141784a'
   - component: "gitlab.gnome.org/GNOME/citemplates/release-service@25.5"
     inputs:
       job-stage: deploy
@@ -34,7 +34,7 @@ default:
   image: $MUTTER_CI_IMAGE
 
 variables:
-  MUTTER_CI_IMAGE: registry.gitlab.gnome.org/gnome/mutter/fedora/43:x86_64-2025-09-13.0
+  MUTTER_CI_IMAGE: registry.gitlab.gnome.org/gnome/mutter/fedora/43:x86_64-2026-02-25.0
   TARBALL_ARTIFACT_PATH: build/meson-dist/$CI_PROJECT_NAME-$CI_COMMIT_TAG.tar.xz
 
 .pipeline-guard:
@@ -49,15 +49,15 @@ variables:
   variables:
     FDO_UPSTREAM_REPO: GNOME/gnome-shell
     FDO_DISTRIBUTION_VERSION: 43
-    FDO_DISTRIBUTION_TAG: '2025-09-10.1'
+    FDO_DISTRIBUTION_TAG: '2025-11-28.0'
     FDO_DISTRIBUTION_PACKAGES:
+      gcc
       gjs
       nodejs
       npm
       meson
       git
       glib-networking
-      'pkgconfig(gobject-introspection-1.0)'
       'pkgconfig(gio-2.0)'
       'pkgconfig(gio-unix-2.0)'
       'pkgconfig(gnome-autoar-0)'
@@ -86,26 +86,6 @@ check-commit-log:
     - if [[ x"$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "x" ]] ;
       then
         ci-fairy check-commits --junit-xml=$JUNIT_REPORT ;
-      else
-        echo "Not a merge request" ;
-      fi
-  rules:
-    - !reference [.pipeline-guard, rules]
-  artifacts:
-    expire_in: 1 week
-    reports:
-      junit: $JUNIT_REPORT
-
-check-merge-request:
-  extends:
-    - .fdo.ci-fairy
-  stage: pre-review
-  variables:
-    JUNIT_REPORT: check-merge-request-report.xml
-  script:
-    - if [[ x"$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" != "x" ]] ;
-      then
-        ci-fairy check-merge-request --require-allow-collaboration --junit-xml=$JUNIT_REPORT ;
       else
         echo "Not a merge request" ;
       fi
@@ -213,20 +193,21 @@ test:
   variables:
     XDG_RUNTIME_DIR: "$CI_PROJECT_DIR/runtime-dir"
     NO_AT_BRIDGE: "1"
+    BUILD_DIR: "build-tests"
   before_script:
     - sudo meson install -C mutter/build
     - mkdir -m 700 $XDG_RUNTIME_DIR
     - mkdir -m 1777 /tmp/.X11-unix
   script:
     # Start with a fresh build dir to ensure test dependencies are correct
-    - meson setup build-test -Dman=false -Dgtk_doc=false
-    - dbus-run-session -- meson test -C build-test --timeout-multiplier 5
+    - meson setup "$BUILD_DIR" -Dman=false -Dgtk_doc=false
+    - dbus-run-session -- meson test -C "$BUILD_DIR" --timeout-multiplier 5
   artifacts:
     expire_in: 1 day
     paths:
-      - build/meson-logs/testlog.txt
+      - "$BUILD_DIR/meson-logs/testlog.txt"
     reports:
-      junit: build/meson-logs/testlog.junit.xml
+      junit: "$BUILD_DIR/meson-logs/testlog.junit.xml"
     when: on_failure
 
 test-coverity:
@@ -241,8 +222,8 @@ test-coverity:
     - sudo meson install -C mutter/build
   script:
     - .gitlab-ci/download-coverity-tarball.sh
-    - CC=clang meson coverity-build -Dman=false
-    - ./coverity/cov-analysis-linux64-*/bin/cov-build --fs-capture-search js --dir cov-int meson compile -C coverity-build
+    - CC=clang meson setup coverity-build -Dman=false
+    - ./coverity/cov-analysis-linux64-*/bin/cov-build --dir cov-int meson compile -C coverity-build
     - tar czf cov-int.tar.gz cov-int
     - curl https://scan.coverity.com/builds?project=GNOME+Shell
       --form token=$COVERITY_TOKEN --form email=carlosg@gnome.org

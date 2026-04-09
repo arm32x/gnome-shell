@@ -108,7 +108,7 @@ static void on_session_status_changed (GDBusProxy *proxy, guint status, ShellApp
 static void on_focus_app_changed (ShellWindowTracker *tracker, GParamSpec *spec, ShellAppUsage *self);
 static void ensure_queued_save (ShellAppUsage *self);
 
-static gboolean idle_save_application_usage (gpointer data);
+static void idle_save_application_usage (gpointer data);
 
 static void restore_from_file (ShellAppUsage *self);
 
@@ -334,6 +334,8 @@ shell_app_usage_finalize (GObject *object)
 
   g_object_unref (self->session_proxy);
 
+  g_clear_pointer (&self->app_usages, g_hash_table_destroy);
+
   G_OBJECT_CLASS (shell_app_usage_parent_class)->finalize(object);
 }
 
@@ -426,7 +428,8 @@ ensure_queued_save (ShellAppUsage *self)
 {
   if (self->save_id != 0)
     return;
-  self->save_id = g_timeout_add_seconds (SAVE_APPS_TIMEOUT_SECONDS, idle_save_application_usage, self);
+  self->save_id = g_timeout_add_seconds_once (SAVE_APPS_TIMEOUT_SECONDS,
+                                              idle_save_application_usage, self);
   g_source_set_name_by_id (self->save_id, "[gnome-shell] idle_save_application_usage");
 }
 
@@ -526,7 +529,7 @@ write_attribute_double (GDataOutputStream *stream,
 }
 
 /* Save app data lists to file */
-static gboolean
+static void
 idle_save_application_usage (gpointer data)
 {
   ShellAppUsage *self = SHELL_APP_USAGE (data);
@@ -546,7 +549,7 @@ idle_save_application_usage (gpointer data)
     {
       g_debug ("Could not save applications usage data: %s", error->message);
       g_error_free (error);
-      return FALSE;
+      return;
     }
   buffered_output = g_buffered_output_stream_new (G_OUTPUT_STREAM (output));
   g_object_unref (output);
@@ -594,7 +597,6 @@ out:
       g_debug ("Could not save applications usage data: %s", error->message);
       g_error_free (error);
     }
-  return FALSE;
 }
 
 static void

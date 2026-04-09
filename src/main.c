@@ -52,6 +52,7 @@ enum {
 };
 static int _shell_debug;
 static gboolean _tracked_signals[NSIG] = { 0 };
+static GThread *main_thread;
 
 static void
 shell_dbus_acquire_name (GDBusProxy  *bus,
@@ -82,7 +83,7 @@ shell_dbus_acquire_name (GDBusProxy  *bus,
 }
 
 static void
-shell_dbus_init (gboolean replace)
+shell_dbus_init ()
 {
   GDBusConnection *session;
   GDBusProxy *bus;
@@ -113,8 +114,6 @@ shell_dbus_init (gboolean replace)
     }
 
   request_name_flags = G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT;
-  if (replace)
-    request_name_flags |= G_BUS_NAME_OWNER_FLAGS_REPLACE;
 
   shell_dbus_acquire_name (bus,
                            request_name_flags,
@@ -123,7 +122,7 @@ shell_dbus_init (gboolean replace)
   if (!(request_name_result == DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER
         || request_name_result == DBUS_REQUEST_NAME_REPLY_ALREADY_OWNER))
     {
-      g_printerr (SHELL_DBUS_SERVICE " already exists on bus and --replace not specified\n");
+      g_printerr (SHELL_DBUS_SERVICE " already exists on bus\n");
       exit (1);
     }
 
@@ -384,7 +383,8 @@ default_log_writer (GLogLevelFlags   log_level,
 
   if ((_shell_debug & SHELL_DEBUG_BACKTRACE_WARNINGS) &&
       ((log_level & G_LOG_LEVEL_CRITICAL) ||
-       (log_level & G_LOG_LEVEL_WARNING)))
+       (log_level & G_LOG_LEVEL_WARNING)) &&
+      g_thread_self () == main_thread)
     {
       const char *log_domain = NULL;
 
@@ -611,6 +611,8 @@ main (int argc, char **argv)
   g_setenv ("GJS_DEBUG_OUTPUT", "stderr", TRUE);
   g_setenv ("GJS_DEBUG_TOPICS", "JS ERROR;JS LOG", TRUE);
 
+  main_thread = g_thread_self ();
+
   context = meta_create_context (WM_NAME);
   meta_context_add_option_entries (context, gnome_shell_options,
                                    GETTEXT_PACKAGE);
@@ -668,7 +670,7 @@ main (int argc, char **argv)
 
   shell_init_debug (g_getenv ("SHELL_DEBUG"));
 
-  shell_dbus_init (meta_context_is_replacing (context));
+  shell_dbus_init ();
   shell_a11y_init ();
   shell_perf_log_init ();
   shell_introspection_init ();
@@ -677,8 +679,7 @@ main (int argc, char **argv)
 
   shell_profiler_init ();
 
-  if (meta_context_get_compositor_type (context) == META_COMPOSITOR_TYPE_WAYLAND)
-    meta_context_raise_rlimit_nofile (context, NULL);
+  meta_context_raise_rlimit_nofile (context, NULL);
 
   if (!meta_context_start (context, &error))
     {

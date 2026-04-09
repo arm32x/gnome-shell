@@ -177,10 +177,10 @@ const StreamSlider = GObject.registerClass({
         if (!this._stream)
             return;
 
-        let value = this.slider.value;
-        let volume = value * this._control.get_vol_max_norm();
-        let prevMuted = this._stream.is_muted;
-        let prevVolume = this._stream.volume;
+        const value = this.slider.value;
+        const volume = value * this._control.get_vol_max_norm();
+        const prevMuted = this._stream.is_muted;
+        const prevVolume = this._stream.volume;
         if (volume < 1) {
             this._stream.volume = 0;
             if (!prevMuted)
@@ -192,12 +192,11 @@ const StreamSlider = GObject.registerClass({
         }
         this._stream.push_volume();
 
-        let volumeChanged = this._stream.volume !== prevVolume;
+        const volumeChanged = this._stream.volume !== prevVolume;
         if (volumeChanged && !this._notifyVolumeChangeId && !this._inDrag) {
-            this._notifyVolumeChangeId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 30, () => {
+            this._notifyVolumeChangeId = GLib.timeout_add_once(GLib.PRIORITY_DEFAULT, 30, () => {
                 this._notifyVolumeChange();
                 this._notifyVolumeChangeId = 0;
-                return GLib.SOURCE_REMOVE;
             });
             GLib.Source.set_name_by_id(this._notifyVolumeChangeId,
                 '[gnome-shell] this._notifyVolumeChangeId');
@@ -213,7 +212,7 @@ const StreamSlider = GObject.registerClass({
             return; // feedback not necessary while playing
 
         this._volumeCancellable = new Gio.Cancellable();
-        let player = global.display.get_sound_player();
+        const player = global.display.get_sound_player();
         player.play_from_theme('audio-volume-change',
             _('Volume changed'), this._volumeCancellable);
     }
@@ -225,7 +224,7 @@ const StreamSlider = GObject.registerClass({
     }
 
     _updateVolume() {
-        let muted = this._stream.is_muted;
+        const muted = this._stream.is_muted;
         this._changeSlider(muted
             ? 0 : this._stream.volume / this._control.get_vol_max_norm());
         this.iconLabel = muted ? _('Unmute') : _('Mute');
@@ -236,8 +235,13 @@ const StreamSlider = GObject.registerClass({
     _amplifySettingsChanged() {
         this._allowAmplified = this._soundSettings.get_boolean(ALLOW_AMPLIFIED_VOLUME_KEY);
 
-        this.slider.maximum_value = this._allowAmplified
+        const maxLevel = this._allowAmplified
             ? this.getMaxLevel() : 1;
+        this.slider.maximum_value = maxLevel;
+
+        this.slider.clearMarks();
+        if (this._allowAmplified)
+            this.slider.addMark(1);
 
         if (this._stream)
             this._updateVolume();
@@ -251,7 +255,7 @@ const StreamSlider = GObject.registerClass({
         if (!this._stream)
             return null;
 
-        let volume = this._stream.volume;
+        const volume = this._stream.volume;
         let n;
         if (this._stream.is_muted || volume <= 0) {
             n = 0;
@@ -405,7 +409,7 @@ class InputStreamSlider extends StreamSlider {
         if (this._stream) {
             // skip gnome-volume-control and pavucontrol which appear
             // as recording because they show the input level
-            let skippedApps = [
+            const skippedApps = [
                 'org.gnome.VolumeControl',
                 'org.PulseAudio.pavucontrol',
             ];
@@ -423,7 +427,7 @@ class InputStreamSlider extends StreamSlider {
     }
 });
 
-let VolumeIndicator = GObject.registerClass(
+const VolumeIndicator = GObject.registerClass(
 class VolumeIndicator extends SystemIndicator {
     constructor() {
         super();
@@ -436,14 +440,14 @@ class VolumeIndicator extends SystemIndicator {
         if (event.get_flags() & Clutter.EventFlags.FLAG_POINTER_EMULATED)
             return Clutter.EVENT_PROPAGATE;
 
-        let direction = event.get_scroll_direction();
+        const direction = event.get_scroll_direction();
         let nSteps = 0;
         if (direction === Clutter.ScrollDirection.DOWN) {
             nSteps = -1;
         } else if (direction === Clutter.ScrollDirection.UP) {
             nSteps = 1;
         } else if (direction === Clutter.ScrollDirection.SMOOTH) {
-            let [, dy] = event.get_scroll_delta();
+            const [, dy] = event.get_scroll_delta();
             nSteps = -dy;
             // Match physical direction
             if (event.get_scroll_flags() & Clutter.ScrollFlags.INVERTED)
@@ -502,8 +506,6 @@ class InputIndicator extends VolumeIndicator {
     constructor() {
         super();
 
-        this._indicator.add_style_class_name('privacy-indicator');
-
         this._indicator.connect('scroll-event',
             (actor, event) => this._handleScrollEvent(this._input, event));
 
@@ -519,6 +521,7 @@ class InputIndicator extends VolumeIndicator {
 
             if (icon)
                 this._indicator.icon_name = icon;
+            this._updatePrivacyIndicator();
         });
 
         this._input.bind_property('visible',
@@ -528,6 +531,18 @@ class InputIndicator extends VolumeIndicator {
         this.quickSettingsItems.push(this._input);
 
         this._onControlStateChanged();
+    }
+
+    _updatePrivacyIndicator() {
+        if (!this._input.stream)
+            return;
+
+        // Muted microphone doesn't need privacy indicator (no privacy concern)
+        const {isMuted} = this._input.stream;
+        if (isMuted)
+            this._indicator.remove_style_class_name('privacy-indicator');
+        else
+            this._indicator.add_style_class_name('privacy-indicator');
     }
 
     _onControlStateChanged() {

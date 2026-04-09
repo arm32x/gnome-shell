@@ -46,9 +46,6 @@ void     shell_global_set_force_animations (ShellGlobal *global,
                                             gboolean     force);
 
 /* Input/event handling */
-void     shell_global_set_stage_input_region (ShellGlobal         *global,
-                                              GSList              *rectangles);
-
 void    shell_global_get_pointer             (ShellGlobal         *global,
                                               int                 *x,
                                               int                 *y,
@@ -92,8 +89,6 @@ GAppLaunchContext *
 void     shell_global_notify_error              (ShellGlobal  *global,
                                                  const char   *msg,
                                                  const char   *details);
-
-void     shell_global_reexec_self               (ShellGlobal  *global);
 
 const char *     shell_global_get_session_mode  (ShellGlobal  *global);
 

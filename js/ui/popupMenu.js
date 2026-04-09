@@ -161,7 +161,7 @@ export const PopupBaseMenuItem = GObject.registerClass({
         if (state)
             return Clutter.EVENT_PROPAGATE;
 
-        let symbol = event.get_key_symbol();
+        const symbol = event.get_key_symbol();
         if (symbol === Clutter.KEY_space || symbol === Clutter.KEY_Return) {
             this.activate(event);
             return Clutter.EVENT_STOP;
@@ -198,7 +198,7 @@ export const PopupBaseMenuItem = GObject.registerClass({
     }
 
     set active(active) {
-        let activeChanged = active !== this.active;
+        const activeChanged = active !== this.active;
         if (activeChanged) {
             this._active = active;
             if (active) {
@@ -220,7 +220,7 @@ export const PopupBaseMenuItem = GObject.registerClass({
     }
 
     syncSensitive() {
-        let sensitive = this.sensitive;
+        const sensitive = this.sensitive;
         this.reactive = sensitive;
         this.can_focus = sensitive;
         this.notify('sensitive');
@@ -338,7 +338,6 @@ export const Switch = GObject.registerClass({
 }, class Switch extends St.Widget {
     _init(state) {
         this._state = false;
-        this._dragging = false;
 
         super._init({
             style_class: 'toggle-switch',
@@ -390,9 +389,14 @@ export const Switch = GObject.registerClass({
             source: this,
         });
         this._handle.add_constraint(this._handleAlignConstraint);
-        this._handle.connect('button-press-event', (actor, event) => this._startDragging(event));
-        this._handle.connect('touch-event', this._touchDragging.bind(this));
         this.add_child(this._handle);
+
+        this._panGesture = new Clutter.PanGesture();
+        this._panGesture.set_begin_threshold(0);
+        this._panGesture.connect('recognize', this._startDragging.bind(this));
+        this._panGesture.connect('pan-update', this._dragUpdate.bind(this));
+        this._panGesture.connect('end', this._endDragging.bind(this));
+        this._handle.add_action(this._panGesture);
 
         this.state = state;
 
@@ -447,91 +451,32 @@ export const Switch = GObject.registerClass({
         this.state = !this.state;
     }
 
-    _startDragging(event) {
-        if (this._dragging)
-            return Clutter.EVENT_PROPAGATE;
-
-        this._dragging = true;
-        [this._initialGrabX] = event.get_coords();
-
+    _startDragging() {
+        const coords = this._panGesture.get_centroid_abs();
+        this._initialGrabX = coords.x;
         this._grab = global.stage.grab(this);
-
-        const backend = global.stage.get_context().get_backend();
-        const sprite = backend.get_sprite(global.stage, event);
-        this._sprite = sprite;
-
-        return Clutter.EVENT_STOP;
-    }
-
-    vfunc_motion_event(event) {
-        const backend = this.get_context().get_backend();
-        const sprite = backend.get_sprite(global.stage, event);
-
-        if (this._dragging && this._sprite === sprite)
-            return this._motionEvent(this, Clutter.get_current_event());
-
-        return Clutter.EVENT_PROPAGATE;
-    }
-
-    vfunc_button_release_event(event) {
-        const backend = this.get_context().get_backend();
-        const sprite = backend.get_sprite(global.stage, event);
-
-        if (this._dragging && this._sprite === sprite)
-            return this._endDragging();
-
-        return Clutter.EVENT_PROPAGATE;
-    }
-
-    _touchDragging(actor, event) {
-        const backend = actor.get_context().get_backend();
-        const sprite = backend.get_sprite(global.stage, event);
-
-        if (!this._dragging &&
-            event.type() === Clutter.EventType.TOUCH_BEGIN) {
-            this.startDragging(event);
-            return Clutter.EVENT_STOP;
-        } else if (this._sprite === sprite) {
-            if (event.type() === Clutter.EventType.TOUCH_UPDATE)
-                return this._motionEvent(this, event);
-            else if (event.type() === Clutter.EventType.TOUCH_END)
-                return this._endDragging();
-        }
-
-        return Clutter.EVENT_PROPAGATE;
     }
 
     _endDragging() {
-        if (!this._dragging)
-            return Clutter.EVENT_PROPAGATE;
-
         if (this._grab) {
             this._grab.dismiss();
             this._grab = null;
         }
 
-        if (this._dragged)
+        const delta = this._panGesture.get_accumulated_delta();
+        if (delta.x > 0)
             this.state = this._handleAlignConstraint.get_factor() > 0.5;
         else
             this.toggle();
-
-        this._dragged = false;
-        this._sprite = null;
-        this._dragging = false;
-
-        return Clutter.EVENT_STOP;
     }
 
-    _motionEvent(actor, event) {
-        this._dragged = true;
-
-        let [absX] = event.get_coords();
-        let factorDiff = (absX - this._initialGrabX) / (this.get_width() - this._handle.get_width());
-        let factor = factorDiff + (this.state ? 1.0 : 0.0);
+    _dragUpdate() {
+        const coords = this._panGesture.get_centroid_abs();
+        const absX = coords.x;
+        const factorDiff = (absX - this._initialGrabX) / (this.get_width() - this._handle.get_width());
+        const factor = factorDiff + (this.state ? 1.0 : 0.0);
 
         this._handleAlignConstraint.set_factor(Math.clamp(factor, 0, 1));
-
-        return Clutter.EVENT_STOP;
     }
 });
 
@@ -762,8 +707,8 @@ export class PopupMenuBase extends Signals.EventEmitter {
     }
 
     addSettingsAction(title, desktopFile) {
-        let menuItem = this.addAction(title, () => {
-            let app = Shell.AppSystem.get_default().lookup_app(desktopFile);
+        const menuItem = this.addAction(title, () => {
+            const app = Shell.AppSystem.get_default().lookup_app(desktopFile);
 
             if (!app) {
                 log(`Settings panel for desktop file ${desktopFile} could not be loaded!`);
@@ -782,14 +727,14 @@ export class PopupMenuBase extends Signals.EventEmitter {
     }
 
     _setSettingsVisibility(visible) {
-        for (let id in this._settingsActions) {
-            let item = this._settingsActions[id];
+        for (const id in this._settingsActions) {
+            const item = this._settingsActions[id];
             item.visible = visible;
         }
     }
 
     isEmpty() {
-        let hasVisibleChildren = this.box.get_children().some(child => {
+        const hasVisibleChildren = this.box.get_children().some(child => {
             if (child._delegate instanceof PopupSeparatorMenuItem)
                 return false;
             return isPopupMenuItemVisible(child);
@@ -854,9 +799,9 @@ export class PopupMenuBase extends Signals.EventEmitter {
         if (menuItem.label.text)
             return;
 
-        let children = this.box.get_children();
+        const children = this.box.get_children();
 
-        let index = children.indexOf(menuItem.actor);
+        const index = children.indexOf(menuItem.actor);
 
         if (index < 0)
             return;
@@ -887,7 +832,7 @@ export class PopupMenuBase extends Signals.EventEmitter {
     }
 
     moveMenuItem(menuItem, position) {
-        let items = this._getMenuItems();
+        const items = this._getMenuItems();
         let i = 0;
 
         while (i < items.length && position > 0) {
@@ -909,7 +854,7 @@ export class PopupMenuBase extends Signals.EventEmitter {
         if (position === undefined) {
             this.box.add_child(menuItem.actor);
         } else {
-            let items = this._getMenuItems();
+            const items = this._getMenuItems();
             if (position < items.length) {
                 beforeItem = items[position].actor;
                 this.box.insert_child_below(menuItem.actor, beforeItem);
@@ -973,7 +918,7 @@ export class PopupMenuBase extends Signals.EventEmitter {
     }
 
     get firstMenuItem() {
-        let items = this._getMenuItems();
+        const items = this._getMenuItems();
         if (items.length)
             return items[0];
         else
@@ -985,9 +930,9 @@ export class PopupMenuBase extends Signals.EventEmitter {
     }
 
     removeAll() {
-        let children = this._getMenuItems();
+        const children = this._getMenuItems();
         for (let i = 0; i < children.length; i++) {
-            let item = children[i];
+            const item = children[i];
             item.destroy();
         }
     }
@@ -1081,7 +1026,7 @@ export class PopupMenu extends PopupMenuBase {
         if (state)
             return Clutter.EVENT_PROPAGATE;
 
-        let symbol = event.get_key_symbol();
+        const symbol = event.get_key_symbol();
 
         if (symbol === Clutter.KEY_space || symbol === Clutter.KEY_Return) {
             this.toggle();
@@ -1221,11 +1166,11 @@ export class PopupSubMenu extends PopupMenuBase {
     }
 
     _needsScrollbar() {
-        let topMenu = this._getTopMenu();
-        let [, topNaturalHeight] = topMenu.actor.get_preferred_height(-1);
-        let topThemeNode = topMenu.actor.get_theme_node();
+        const topMenu = this._getTopMenu();
+        const [, topNaturalHeight] = topMenu.actor.get_preferred_height(-1);
+        const topThemeNode = topMenu.actor.get_theme_node();
 
-        let topMaxHeight = topThemeNode.get_max_height();
+        const topMaxHeight = topThemeNode.get_max_height();
         return topMaxHeight >= 0 && topNaturalHeight >= topMaxHeight;
     }
 
@@ -1249,7 +1194,7 @@ export class PopupSubMenu extends PopupMenuBase {
 
         this.actor.show();
 
-        let needsScrollbar = this._needsScrollbar();
+        const needsScrollbar = this._needsScrollbar();
 
         // St.ScrollView always requests space horizontally for a possible vertical
         // scrollbar if in AUTOMATIC mode. Doing better would require implementation
@@ -1269,10 +1214,10 @@ export class PopupSubMenu extends PopupMenuBase {
         if (animate && needsScrollbar)
             animate = false;
 
-        let targetAngle = this.actor.text_direction === Clutter.TextDirection.RTL ? -90 : 90;
+        const targetAngle = this.actor.text_direction === Clutter.TextDirection.RTL ? -90 : 90;
 
         const duration = animate ? 250 : 0;
-        let [, naturalHeight] = this.actor.get_preferred_height(-1);
+        const [, naturalHeight] = this.actor.get_preferred_height(-1);
         this.actor.height = 0;
         this.actor.ease({
             height: naturalHeight,
@@ -1380,7 +1325,7 @@ class PopupSubMenuMenuItem extends PopupBaseMenuItem {
         this.add_child(this.label);
         this.label_actor = this.label;
 
-        let expander = new St.Bin({
+        const expander = new St.Bin({
             style_class: 'popup-menu-item-expander',
             x_expand: true,
         });
@@ -1409,7 +1354,7 @@ class PopupSubMenuMenuItem extends PopupBaseMenuItem {
     }
 
     syncSensitive() {
-        let sensitive = super.syncSensitive();
+        const sensitive = super.syncSensitive();
         this._triangle.visible = sensitive;
         if (!sensitive)
             this.menu.close(false);
@@ -1445,7 +1390,7 @@ class PopupSubMenuMenuItem extends PopupBaseMenuItem {
     }
 
     vfunc_key_press_event(event) {
-        let symbol = event.get_key_symbol();
+        const symbol = event.get_key_symbol();
 
         if (symbol === Clutter.KEY_Right) {
             this._setOpenState(true);
@@ -1511,9 +1456,6 @@ export class PopupMenuManager {
         this._menus.splice(position, 1);
     }
 
-    ignoreRelease() {
-    }
-
     _onMenuOpenState(menu, open) {
         if (open && this.activeMenu === menu)
             return;
@@ -1533,8 +1475,8 @@ export class PopupMenuManager {
                         if (!this.activeMenu)
                             return;
 
-                        let actor = global.stage.get_key_focus();
-                        let newMenu = this._findMenuForSource(actor);
+                        const actor = global.stage.get_key_focus();
+                        const newMenu = this._findMenuForSource(actor);
 
                         if (newMenu)
                             this._changeMenu(newMenu);
@@ -1559,11 +1501,11 @@ export class PopupMenuManager {
     }
 
     _onCapturedEvent(actor, event) {
-        let menu = actor._delegate;
+        const menu = actor._delegate;
         const targetActor = global.stage.get_event_actor(event);
 
         if (event.type() === Clutter.EventType.KEY_PRESS) {
-            let symbol = event.get_key_symbol();
+            const symbol = event.get_key_symbol();
             if (symbol === Clutter.KEY_Down &&
                 global.stage.get_key_focus() === menu.actor) {
                 actor.navigate_focus(null, St.DirectionType.TAB_FORWARD, false);
@@ -1574,7 +1516,7 @@ export class PopupMenuManager {
             }
         } else if (event.type() === Clutter.EventType.ENTER &&
                    (event.get_flags() & Clutter.EventFlags.FLAG_GRAB_NOTIFY) === 0) {
-            let hoveredMenu = this._findMenuForSource(targetActor);
+            const hoveredMenu = this._findMenuForSource(targetActor);
 
             if (hoveredMenu && hoveredMenu !== menu)
                 this._changeMenu(hoveredMenu);
@@ -1589,7 +1531,7 @@ export class PopupMenuManager {
 
     _findMenuForSource(source) {
         while (source) {
-            let actor = source;
+            const actor = source;
             const menu = this._menus.find(m => m.sourceActor === actor);
             if (menu)
                 return menu;

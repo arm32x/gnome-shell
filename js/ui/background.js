@@ -119,7 +119,7 @@ const PICTURE_URI_DARK_KEY = 'picture-uri-dark';
 const INTERFACE_SCHEMA = 'org.gnome.desktop.interface';
 const COLOR_SCHEME_KEY = 'color-scheme';
 
-const FADE_ANIMATION_TIME = 1000;
+export const FADE_ANIMATION_TIME = 1000;
 
 // These parameters affect how often we redraw.
 // The first is how different (percent crossfaded) the slide show
@@ -150,11 +150,11 @@ class BackgroundCache extends Signals.EventEmitter {
     }
 
     monitorFile(file) {
-        let key = file.hash();
+        const key = file.hash();
         if (this._fileMonitors[key])
             return;
 
-        let monitor = file.monitor(Gio.FileMonitorFlags.NONE, null);
+        const monitor = file.monitor(Gio.FileMonitorFlags.NONE, null);
         monitor.connect('changed',
             (obj, theFile, otherFile, eventType) => {
                 // Ignore CHANGED and CREATED events, since in both cases
@@ -177,9 +177,8 @@ class BackgroundCache extends Signals.EventEmitter {
         let animation = this._animations[params.settingsSchema];
         if (animation && _fileEqual0(animation.file, params.file)) {
             if (params.onLoaded) {
-                let id = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                const id = GLib.idle_add_once(GLib.PRIORITY_DEFAULT, () => {
                     params.onLoaded(this._animations[params.settingsSchema]);
-                    return GLib.SOURCE_REMOVE;
                 });
                 GLib.Source.set_name_by_id(id, '[gnome-shell] params.onLoaded');
             }
@@ -192,9 +191,8 @@ class BackgroundCache extends Signals.EventEmitter {
             this._animations[params.settingsSchema] = animation;
 
             if (params.onLoaded) {
-                let id = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                const id = GLib.idle_add_once(GLib.PRIORITY_DEFAULT, () => {
                     params.onLoaded(this._animations[params.settingsSchema]);
-                    return GLib.SOURCE_REMOVE;
                 });
                 GLib.Source.set_name_by_id(id, '[gnome-shell] params.onLoaded');
             }
@@ -217,7 +215,7 @@ class BackgroundCache extends Signals.EventEmitter {
 
     releaseBackgroundSource(settingsSchema) {
         if (settingsSchema in this._backgroundSources) {
-            let source = this._backgroundSources[settingsSchema];
+            const source = this._backgroundSources[settingsSchema];
             source._useCount--;
             if (source._useCount === 0) {
                 delete this._backgroundSources[settingsSchema];
@@ -268,7 +266,7 @@ const Background = GObject.registerClass({
                     this._loadAnimation(this._animation.file);
             }, this);
 
-        let loginManager = LoginManager.getLoginManager();
+        const loginManager = LoginManager.getLoginManager();
         loginManager.connectObject('prepare-for-sleep',
             (lm, aboutToSuspend) => {
                 if (aboutToSuspend)
@@ -290,7 +288,7 @@ const Background = GObject.registerClass({
         this._removeAnimationTimeout();
 
         let i;
-        let keys = Object.keys(this._fileWatches);
+        const keys = Object.keys(this._fileWatches);
         for (i = 0; i < keys.length; i++)
             this._cache.disconnect(this._fileWatches[keys[i]]);
 
@@ -313,10 +311,9 @@ const Background = GObject.registerClass({
         if (this._changedIdleId)
             return;
 
-        this._changedIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        this._changedIdleId = GLib.idle_add_once(GLib.PRIORITY_DEFAULT, () => {
             this._changedIdleId = 0;
             this.emit('bg-changed');
-            return GLib.SOURCE_REMOVE;
         });
         GLib.Source.set_name_by_id(this._changedIdleId,
             '[gnome-shell] Background._emitChangedSignal');
@@ -343,22 +340,19 @@ const Background = GObject.registerClass({
         if (this._cancellable?.is_cancelled())
             return;
 
-        let id = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        const id = GLib.idle_add_once(GLib.PRIORITY_DEFAULT, () => {
             this.emit('loaded');
-            return GLib.SOURCE_REMOVE;
         });
         GLib.Source.set_name_by_id(id, '[gnome-shell] Background._setLoaded Idle');
     }
 
     _loadPattern() {
-        let colorString, res_, color, secondColor;
-
-        colorString = this._settings.get_string(PRIMARY_COLOR_KEY);
-        [res_, color] = Cogl.Color.from_string(colorString);
+        let colorString = this._settings.get_string(PRIMARY_COLOR_KEY);
+        const [, color] = Cogl.Color.from_string(colorString);
         colorString = this._settings.get_string(SECONDARY_COLOR_KEY);
-        [res_, secondColor] = Cogl.Color.from_string(colorString);
+        const [, secondColor] = Cogl.Color.from_string(colorString);
 
-        let shadingType = this._settings.get_enum(COLOR_SHADING_TYPE_KEY);
+        const shadingType = this._settings.get_enum(COLOR_SHADING_TYPE_KEY);
 
         if (shadingType === GDesktopEnums.BackgroundShading.SOLID)
             this.set_color(color);
@@ -367,15 +361,15 @@ const Background = GObject.registerClass({
     }
 
     _watchFile(file) {
-        let key = file.hash();
+        const key = file.hash();
         if (this._fileWatches[key])
             return;
 
         this._cache.monitorFile(file);
-        let signalId = this._cache.connect('file-changed',
+        const signalId = this._cache.connect('file-changed',
             (cache, changedFile) => {
                 if (changedFile.equal(file)) {
-                    let imageCache = Meta.BackgroundImageCache.get_default();
+                    const imageCache = Meta.BackgroundImageCache.get_default();
                     imageCache.purge(changedFile);
                     this._emitChangedSignal();
                 }
@@ -394,9 +388,9 @@ const Background = GObject.registerClass({
         this._updateAnimationTimeoutId = 0;
 
         this._animation.update(this._layoutManager.monitors[this._monitorIndex]);
-        let files = this._animation.keyFrameFiles;
+        const files = this._animation.keyFrameFiles;
 
-        let finish = () => {
+        const finish = () => {
             this._setLoaded();
             if (files.length > 1) {
                 this.set_blend(files[0], files[1],
@@ -410,18 +404,18 @@ const Background = GObject.registerClass({
             this._queueUpdateAnimation();
         };
 
-        let cache = Meta.BackgroundImageCache.get_default();
+        const cache = Meta.BackgroundImageCache.get_default();
         let numPendingImages = files.length;
         for (let i = 0; i < files.length; i++) {
             this._watchFile(files[i]);
-            let image = cache.load(files[i]);
+            const image = cache.load(files[i]);
             if (image.is_loaded()) {
                 numPendingImages--;
                 if (numPendingImages === 0)
                     finish();
             } else {
                 // eslint-disable-next-line no-loop-func
-                let id = image.connect('loaded', () => {
+                const id = image.connect('loaded', () => {
                     image.disconnect(id);
                     numPendingImages--;
                     if (numPendingImages === 0)
@@ -441,22 +435,21 @@ const Background = GObject.registerClass({
         if (!this._animation.transitionDuration)
             return;
 
-        let nSteps = 255 / ANIMATION_OPACITY_STEP_INCREMENT;
-        let timePerStep = (this._animation.transitionDuration * 1000) / nSteps;
+        const nSteps = 255 / ANIMATION_OPACITY_STEP_INCREMENT;
+        const timePerStep = (this._animation.transitionDuration * 1000) / nSteps;
 
-        let interval = Math.max(
+        const interval = Math.max(
             ANIMATION_MIN_WAKEUP_INTERVAL * 1000,
             timePerStep);
 
         if (interval > GLib.MAXUINT32)
             return;
 
-        this._updateAnimationTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+        this._updateAnimationTimeoutId = GLib.timeout_add_once(GLib.PRIORITY_DEFAULT,
             interval,
             () => {
                 this._updateAnimationTimeoutId = 0;
                 this._updateAnimation();
-                return GLib.SOURCE_REMOVE;
             });
         GLib.Source.set_name_by_id(this._updateAnimationTimeoutId, '[gnome-shell] this._updateAnimation');
     }
@@ -483,12 +476,12 @@ const Background = GObject.registerClass({
         this.set_file(file, this._style);
         this._watchFile(file);
 
-        let cache = Meta.BackgroundImageCache.get_default();
-        let image = cache.load(file);
+        const cache = Meta.BackgroundImageCache.get_default();
+        const image = cache.load(file);
         if (image.is_loaded()) {
             this._setLoaded();
         } else {
-            let id = image.connect('loaded', () => {
+            const id = image.connect('loaded', () => {
                 this._setLoaded();
                 image.disconnect(id);
             });
@@ -546,9 +539,8 @@ export const SystemBackground = GObject.registerClass({
         });
         this.content.background = _systemBackground;
 
-        let id = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        const id = GLib.idle_add_once(GLib.PRIORITY_DEFAULT, () => {
             this.emit('loaded');
-            return GLib.SOURCE_REMOVE;
         });
         GLib.Source.set_name_by_id(id, '[gnome-shell] SystemBackground.loaded');
     }
@@ -571,8 +563,8 @@ class BackgroundSource {
     }
 
     _onMonitorsChanged() {
-        for (let monitorIndex in this._backgrounds) {
-            let background = this._backgrounds[monitorIndex];
+        for (const monitorIndex in this._backgrounds) {
+            const background = this._backgrounds[monitorIndex];
 
             if (monitorIndex < this._layoutManager.monitors.length) {
                 background.updateResolution();
@@ -616,7 +608,7 @@ class BackgroundSource {
             monitorIndex = 0;
 
         if (!(monitorIndex in this._backgrounds)) {
-            let background = new Background({
+            const background = new Background({
                 monitorIndex,
                 layoutManager: this._layoutManager,
                 settings: this._settings,
@@ -640,8 +632,8 @@ class BackgroundSource {
         const monitorManager = global.backend.get_monitor_manager();
         monitorManager.disconnect(this._monitorsChangedId);
 
-        for (let monitorIndex in this._backgrounds) {
-            let background = this._backgrounds[monitorIndex];
+        for (const monitorIndex in this._backgrounds) {
+            const background = this._backgrounds[monitorIndex];
             background.disconnect(background._changedId);
             background.destroy();
         }
@@ -675,7 +667,7 @@ class Animation extends GnomeBG.BGSlideShow {
         if (this.get_num_slides() < 1)
             return;
 
-        let [progress, duration, isFixed_, filename1, filename2] =
+        const [progress, duration, isFixed_, filename1, filename2] =
             this.get_current_slide(monitor.width, monitor.height);
 
         this.transitionDuration = duration;
@@ -702,7 +694,7 @@ export class BackgroundManager extends Signals.EventEmitter {
             useContentSize: true,
         });
 
-        let cache = getBackgroundCache();
+        const cache = getBackgroundCache();
         this._settingsSchema = params.settingsSchema;
         this._backgroundSource = cache.getBackgroundSource(params.layoutManager, params.settingsSchema);
 
@@ -718,7 +710,7 @@ export class BackgroundManager extends Signals.EventEmitter {
     }
 
     destroy() {
-        let cache = getBackgroundCache();
+        const cache = getBackgroundCache();
         cache.releaseBackgroundSource(this._settingsSchema);
         this._backgroundSource = null;
 
@@ -734,7 +726,7 @@ export class BackgroundManager extends Signals.EventEmitter {
     }
 
     _swapBackgroundActor() {
-        let oldBackgroundActor = this.backgroundActor;
+        const oldBackgroundActor = this.backgroundActor;
         this.backgroundActor = this._newBackgroundActor;
         this._newBackgroundActor = null;
         this.emit('changed');
@@ -759,7 +751,7 @@ export class BackgroundManager extends Signals.EventEmitter {
             this._newBackgroundActor = null;
         }
 
-        let newBackgroundActor = this._createBackgroundActor();
+        const newBackgroundActor = this._createBackgroundActor();
 
         const oldContent = this.backgroundActor.content;
         const newContent = newBackgroundActor.content;
@@ -787,8 +779,8 @@ export class BackgroundManager extends Signals.EventEmitter {
     }
 
     _createBackgroundActor() {
-        let background = this._backgroundSource.getBackground(this._monitorIndex);
-        let backgroundActor = new Meta.BackgroundActor({
+        const background = this._backgroundSource.getBackground(this._monitorIndex);
+        const backgroundActor = new Meta.BackgroundActor({
             meta_display: global.display,
             monitor: this._monitorIndex,
             request_mode: this._useContentSize
@@ -807,7 +799,7 @@ export class BackgroundManager extends Signals.EventEmitter {
         this._container.add_child(backgroundActor);
 
         if (this._controlPosition) {
-            let monitor = this._layoutManager.monitors[this._monitorIndex];
+            const monitor = this._layoutManager.monitors[this._monitorIndex];
             backgroundActor.set_position(monitor.x, monitor.y);
             this._container.set_child_below_sibling(backgroundActor, null);
         }
@@ -820,9 +812,8 @@ export class BackgroundManager extends Signals.EventEmitter {
 
         let loadedSignalId;
         if (background.isLoaded) {
-            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            GLib.idle_add_once(GLib.PRIORITY_DEFAULT, () => {
                 this.emit('loaded');
-                return GLib.SOURCE_REMOVE;
             });
         } else {
             loadedSignalId = background.connect('loaded', () => {

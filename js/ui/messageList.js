@@ -5,7 +5,6 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
-import Meta from 'gi://Meta';
 import Pango from 'gi://Pango';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -16,9 +15,10 @@ import * as Mpris from './mpris.js';
 
 import * as Util from '../misc/util.js';
 import {formatTimeSpan} from '../misc/dateUtils.js';
+import {logErrorUnlessCancelled} from '../misc/errorUtils.js';
 
 const MAX_NOTIFICATION_BUTTONS = 3;
-const MESSAGE_ANIMATION_TIME = 100;
+export const MESSAGE_ANIMATION_TIME = 100;
 
 const EXPANDED_GROUP_OVERSHOT_HEIGHT = 50;
 const DEFAULT_EXPAND_LINES = 6;
@@ -41,9 +41,9 @@ class URLHighlighter extends St.Label {
         });
         this._linkColor = '#ccccff';
         this.connect('style-changed', () => {
-            let [hasColor, color] = this.get_theme_node().lookup_color('link-color', false);
+            const [hasColor, color] = this.get_theme_node().lookup_color('link-color', false);
             if (hasColor) {
-                let linkColor = color.to_string().substring(0, 7);
+                const linkColor = color.to_string().substring(0, 7);
                 if (linkColor !== this._linkColor) {
                     this._linkColor = linkColor;
                     this._highlightUrls();
@@ -54,26 +54,23 @@ class URLHighlighter extends St.Label {
         this.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
 
         this.setMarkup(text, allowMarkup);
+
+        this._clickGesture = new Clutter.ClickGesture();
+        this._clickGesture.connectObject(
+            'recognize', this._onClick.bind(this),
+            'may-recognize', this._checkInUrl.bind(this));
+        this.add_action(this._clickGesture);
     }
 
-    vfunc_button_press_event(event) {
-        // Don't try to URL highlight when invisible.
-        // The MessageTray doesn't actually hide us, so
-        // we need to check for paint opacities as well.
-        if (!this.visible || this.get_paint_opacity() === 0)
-            return Clutter.EVENT_PROPAGATE;
-
-        // Keep Notification from seeing this and taking
-        // a pointer grab, which would block our button-release-event
-        // handler, if an URL is clicked
-        return this._findUrlAtPos(event) !== -1;
+    _checkInUrl() {
+        const {x, y} = this._clickGesture.get_coords_abs();
+        const urlId = this._findUrlAtPos(x, y);
+        return urlId !== -1;
     }
 
-    vfunc_button_release_event(event) {
-        if (!this.visible || this.get_paint_opacity() === 0)
-            return Clutter.EVENT_PROPAGATE;
-
-        const urlId = this._findUrlAtPos(event);
+    _onClick() {
+        const {x, y} = this._clickGesture.get_coords_abs();
+        const urlId = this._findUrlAtPos(x, y);
         if (urlId !== -1) {
             let url = this._urls[urlId].url;
             if (!url.includes(':'))
@@ -81,21 +78,19 @@ class URLHighlighter extends St.Label {
 
             Gio.app_info_launch_default_for_uri(
                 url, global.create_app_launch_context(0, -1));
-            return Clutter.EVENT_STOP;
         }
-        return Clutter.EVENT_PROPAGATE;
     }
 
     vfunc_motion_event(event) {
         if (!this.visible || this.get_paint_opacity() === 0)
             return Clutter.EVENT_PROPAGATE;
 
-        const urlId = this._findUrlAtPos(event);
+        const urlId = this._findUrlAtPos(...event.get_coords());
         if (urlId !== -1 && !this._cursorChanged) {
-            global.display.set_cursor(Meta.Cursor.POINTER);
+            this.set_cursor_type(Clutter.CursorType.POINTER);
             this._cursorChanged = true;
         } else if (urlId === -1) {
-            global.display.set_cursor(Meta.Cursor.DEFAULT);
+            this.set_cursor_type(Clutter.CursorType.DEFAULT);
             this._cursorChanged = false;
         }
         return Clutter.EVENT_PROPAGATE;
@@ -107,7 +102,7 @@ class URLHighlighter extends St.Label {
 
         if (this._cursorChanged) {
             this._cursorChanged = false;
-            global.display.set_cursor(Meta.Cursor.DEFAULT);
+            this.set_cursor_type(Clutter.CursorType.DEFAULT);
         }
         return super.vfunc_leave_event(event);
     }
@@ -124,12 +119,12 @@ class URLHighlighter extends St.Label {
 
     _highlightUrls() {
         // text here contain markup
-        let urls = Util.findUrls(this._text);
+        const urls = Util.findUrls(this._text);
         let markup = '';
         let pos = 0;
         for (let i = 0; i < urls.length; i++) {
-            let url = urls[i];
-            let str = this._text.substring(pos, url.pos);
+            const url = urls[i];
+            const str = this._text.substring(pos, url.pos);
             markup += `${str}<span foreground="${this._linkColor}"><u>${url.url}</u></span>`;
             pos = url.pos + url.url.length;
         }
@@ -137,12 +132,11 @@ class URLHighlighter extends St.Label {
         this.clutter_text.set_markup(markup);
     }
 
-    _findUrlAtPos(event) {
-        let [x, y] = event.get_coords();
+    _findUrlAtPos(x, y) {
         [, x, y] = this.transform_stage_point(x, y);
         let findPos = -1;
         for (let i = 0; i < this.clutter_text.text.length; i++) {
-            let [, px, py, lineHeight] = this.clutter_text.position_to_coords(i);
+            const [, px, py, lineHeight] = this.clutter_text.position_to_coords(i);
             if (py > y || py + lineHeight < y || x < px)
                 continue;
             findPos = i;
@@ -461,7 +455,7 @@ export const Message = GObject.registerClass({
         this.expanded = false;
         this._useBodyMarkup = false;
 
-        let vbox = new St.BoxLayout({
+        const vbox = new St.BoxLayout({
             orientation: Clutter.Orientation.VERTICAL,
             x_expand: true,
         });
@@ -619,6 +613,9 @@ export const Message = GObject.registerClass({
     }
 
     expand(animate) {
+        if (this.expanded)
+            return;
+
         this.expanded = true;
 
         this._actionBin.visible = !!this._actionBin.child;
@@ -674,7 +671,7 @@ export const Message = GObject.registerClass({
     }
 
     vfunc_key_press_event(event) {
-        let keysym = event.get_key_symbol();
+        const keysym = event.get_key_symbol();
 
         if (keysym === Clutter.KEY_Delete ||
             keysym === Clutter.KEY_KP_Delete ||
@@ -793,6 +790,8 @@ class MediaMessage extends Message {
                 this._player.next();
             });
 
+        Main.sessionMode.connectObject('updated',
+            () => this._applyPolicy(), this);
         this._player.connectObject('changed', this._update.bind(this), this);
         this._update();
     }
@@ -803,6 +802,12 @@ class MediaMessage extends Message {
 
         this._player.raise();
         Main.panel.closeCalendar();
+    }
+
+    _applyPolicy() {
+        this.visible =
+            this._policy.enable &&
+            (!Main.sessionMode.isLocked || this._policy.showInLockScreen);
     }
 
     _updateNavButton(button, sensitive) {
@@ -824,14 +829,30 @@ class MediaMessage extends Message {
             icon,
         });
 
-        let isPlaying = this._player.status === 'Playing';
-        let iconName = isPlaying
+        const isPlaying = this._player.status === 'Playing';
+        const iconName = isPlaying
             ? 'media-playback-pause-symbolic'
             : 'media-playback-start-symbolic';
         this._playPauseButton.child.icon_name = iconName;
 
         this._updateNavButton(this._prevButton, this._player.canGoPrevious);
         this._updateNavButton(this._nextButton, this._player.canGoNext);
+
+        const appId = this._player.app?.id.replace(/\.desktop$/, '') ?? 'generic';
+        if (this._policy?.id !== appId) {
+            this._policy?.disconnectObject(this);
+
+            this._policy = MessageTray.NotificationPolicy.newForApp(this._player.app);
+
+            // Register notification source
+            this._policy.store();
+
+            this._policy.connectObject(
+                'notify::enable', () => this._applyPolicy(),
+                'notify::show-in-lock-screen', () => this._applyPolicy(),
+                this);
+            this._applyPolicy();
+        }
     }
 });
 
@@ -958,13 +979,10 @@ export const NotificationMessageGroup = GObject.registerClass({
         this.notify('expanded');
         this._cover.hide();
 
-        await new Promise((resolve, _) => {
-            this.ease_property('@layout.expansion', 1, {
-                progress_mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                duration: GROUP_EXPENSION_TIME,
-                onComplete: () => resolve(),
-            });
-        });
+        await this.ease_property_async('@layout.expansion', 1, {
+            progress_mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            duration: GROUP_EXPENSION_TIME,
+        }).catch(logErrorUnlessCancelled);
     }
 
     async collapse() {
@@ -982,13 +1000,10 @@ export const NotificationMessageGroup = GObject.registerClass({
         this._cover.show();
         this._updateStackedMessagesFade();
 
-        await new Promise((resolve, _) => {
-            this.ease_property('@layout.expansion', 0, {
-                progress_mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                duration: GROUP_EXPENSION_TIME,
-                onComplete: () => resolve(),
-            });
-        });
+        await this.ease_property_async('@layout.expansion', 0, {
+            progress_mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            duration: GROUP_EXPENSION_TIME,
+        }).catch(logErrorUnlessCancelled);
 
         this._headerBox.hide();
     }
@@ -1337,7 +1352,7 @@ const MessageGroupExpanderLayout = GObject.registerClass({
 
     vfunc_allocate(container, box) {
         const childWidth = box.x2 - box.x1;
-        let fullY2 = box.y2;
+        const fullY2 = box.y2;
 
         if (this._cover.visible)
             this._cover.allocate(box);

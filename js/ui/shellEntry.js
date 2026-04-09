@@ -1,3 +1,4 @@
+import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
@@ -36,7 +37,7 @@ export class EntryMenu extends PopupMenu.PopupMenu {
     }
 
     _makePasswordItem() {
-        let item = new PopupMenu.PopupMenuItem('');
+        const item = new PopupMenu.PopupMenuItem('');
         item.connect('activate', this._onPasswordActivated.bind(this));
         this.addMenuItem(item);
         this._passwordItem = item;
@@ -55,13 +56,13 @@ export class EntryMenu extends PopupMenu.PopupMenu {
         super.open(animate);
         this._entry.add_style_pseudo_class('focus');
 
-        let direction = St.DirectionType.TAB_FORWARD;
+        const direction = St.DirectionType.TAB_FORWARD;
         if (!this.actor.navigate_focus(null, direction, false))
             this.actor.grab_key_focus();
     }
 
     _updateCopyItem() {
-        let selection = this._entry.clutter_text.get_selection();
+        const selection = this._entry.clutter_text.get_selection();
         this._copyItem.setSensitive(!this._entry.clutter_text.password_char &&
                                     selection && selection !== '');
     }
@@ -81,7 +82,7 @@ export class EntryMenu extends PopupMenu.PopupMenu {
     }
 
     _onCopyActivated() {
-        let selection = this._entry.clutter_text.get_selection();
+        const selection = this._entry.clutter_text.get_selection();
         this._clipboard.set_text(St.ClipboardType.CLIPBOARD, selection);
     }
 
@@ -91,7 +92,7 @@ export class EntryMenu extends PopupMenu.PopupMenu {
                 if (!text)
                     return;
                 this._entry.clutter_text.delete_selection();
-                let pos = this._entry.clutter_text.get_cursor_position();
+                const pos = this._entry.clutter_text.get_cursor_position();
                 this._entry.clutter_text.insert_text(text, pos);
             });
     }
@@ -102,27 +103,24 @@ export class EntryMenu extends PopupMenu.PopupMenu {
 }
 
 function _setMenuAlignment(entry, stageX) {
-    let [success, entryX] = entry.transform_stage_point(stageX, 0);
+    const [success, entryX] = entry.transform_stage_point(stageX, 0);
     if (success)
         entry.menu.setSourceAlignment(entryX / entry.width);
 }
 
-function _onButtonPressEvent(actor, event, entry) {
+function _onMenuClickGesture(gesture, entry) {
     if (entry.menu.isOpen) {
         entry.menu.close(BoxPointer.PopupAnimation.FULL);
-        return Clutter.EVENT_STOP;
-    } else if (event.get_button() === 3) {
-        let [stageX] = event.get_coords();
-        _setMenuAlignment(entry, stageX);
+    } else if (gesture.get_button() === Clutter.BUTTON_SECONDARY) {
+        const coords = gesture.get_coords_abs();
+        _setMenuAlignment(entry, coords.x);
         entry.menu.open(BoxPointer.PopupAnimation.FULL);
-        return Clutter.EVENT_STOP;
     }
-    return Clutter.EVENT_PROPAGATE;
 }
 
 function _onPopup(actor, entry) {
-    let cursorPosition = entry.clutter_text.get_cursor_position();
-    let [success, textX, textY_, lineHeight_] = entry.clutter_text.position_to_coords(cursorPosition);
+    const cursorPosition = entry.clutter_text.get_cursor_position();
+    const [success, textX, textY_, lineHeight_] = entry.clutter_text.position_to_coords(cursorPosition);
     if (success)
         entry.menu.setSourceAlignment(textX / entry.width);
     entry.menu.open(BoxPointer.PopupAnimation.FULL);
@@ -144,15 +142,13 @@ export function addContextMenu(entry, params) {
     });
     entry._menuManager.addMenu(entry.menu);
 
-    // Add an event handler to both the entry and its clutter_text; the former
-    // so padding is included in the clickable area, the latter because the
-    // event processing of ClutterText prevents event-bubbling.
-    entry.clutter_text.connect('button-press-event', (actor, event) => {
-        _onButtonPressEvent(actor, event, entry);
-    });
-    entry.connect('button-press-event', (actor, event) => {
-        _onButtonPressEvent(actor, event, entry);
-    });
+    const clickGesture = new Clutter.ClickGesture();
+    clickGesture.set_recognize_on_press(true);
+    clickGesture.set_required_button(Clutter.BUTTON_SECONDARY);
+    clickGesture.connect(
+        'recognize', gesture => _onMenuClickGesture(gesture, entry));
+    entry.add_action_full(
+        'menu-click-gesture', Clutter.EventPhase.CAPTURE, clickGesture);
 
     entry.connect('popup-menu', actor => _onPopup(actor, entry));
 
@@ -193,14 +189,22 @@ class CapsLockWarning extends St.Label {
     }
 
     _sync(animate) {
-        let capsLockOn = this._keymap.get_caps_lock_state();
+        const capsLockOn = this._keymap.get_caps_lock_state();
 
         this.remove_all_transitions();
 
         const {naturalHeightSet} = this;
         this.natural_height_set = false;
-        let [, height] = this.get_preferred_height(-1);
+        const [, height] = this.get_preferred_height(-1);
         this.natural_height_set = naturalHeightSet;
+
+        if (capsLockOn) {
+            this.add_accessible_state(Atk.StateType.SHOWING);
+            this.add_accessible_state(Atk.StateType.VISIBLE);
+        } else {
+            this.remove_accessible_state(Atk.StateType.SHOWING);
+            this.remove_accessible_state(Atk.StateType.VISIBLE);
+        }
 
         this.ease({
             height: capsLockOn ? height : 0,

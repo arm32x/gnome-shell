@@ -1,4 +1,5 @@
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Atk from 'gi://Atk';
 import GObject from 'gi://GObject';
@@ -15,11 +16,100 @@ import * as ShellEntry from '../ui/shellEntry.js';
 import * as UserWidget from '../ui/userWidget.js';
 import {wiggle} from '../misc/animationUtils.js';
 
+import {loadInterfaceXML} from '../misc/fileUtils.js';
+
+const TimerChildIface = loadInterfaceXML('org.freedesktop.MalcontentTimer1.Child');
+const TimerChildProxy = Gio.DBusProxy.makeProxyWrapper(TimerChildIface);
+
 const DEFAULT_BUTTON_WELL_ICON_SIZE = 16;
 const DEFAULT_BUTTON_WELL_ANIMATION_DELAY = 1000;
-const DEFAULT_BUTTON_WELL_ANIMATION_TIME = 300;
 
-const MESSAGE_FADE_OUT_ANIMATION_TIME = 500;
+// A widget displayed instead of the unlock prompt
+// when parental controls session limits are reached
+const ParentalControlsShield = GObject.registerClass(
+class ParentalControlsShield extends St.BoxLayout {
+    _init() {
+        super._init({
+            style_class: 'parental-controls-shield',
+            orientation: Clutter.Orientation.VERTICAL,
+            x_align: Clutter.ActorAlign.CENTER,
+        });
+
+        this._requestExtensionCookie = null;
+
+        this._timerChildProxy = TimerChildProxy(Gio.DBus.system,
+            'org.freedesktop.MalcontentTimer1',
+            '/org/freedesktop/MalcontentTimer1',
+            (proxy, error) => {
+                if (error)
+                    console.error(`Failed to get TimerChild proxy: ${error}`);
+            },
+            null, /* cancellable */
+            Gio.DBusProxyFlags.DO_NOT_AUTO_START_AT_CONSTRUCTION
+        );
+
+        this._timerChildProxy.connectSignal('ExtensionResponse', (proxy, sender, params) =>
+            this._onExtensionResponse(proxy, sender, params));
+
+        this.connect('destroy', this._onDestroy.bind(this));
+
+        this._titleLabel = new St.Label({
+            style_class: 'parental-controls-shield-title',
+            text: _('Screen Time Limit Reached'),
+        });
+        this.add_child(this._titleLabel);
+
+        this._descriptionLabel = new St.Label({
+            style_class: 'parental-controls-shield-description',
+            text: _('Daily limit for screen time on this device has been reached. Resume tomorrow.'),
+        });
+        this._descriptionLabel.clutter_text.line_wrap = true;
+        this.add_child(this._descriptionLabel);
+
+        this._ignoreButton = new St.Button({
+            style_class: 'parental-controls-shield-button',
+            // Translators: this is for ignoring a screen time limit for parental controls
+            label: _('Ignore'),
+            x_align: Clutter.ActorAlign.CENTER,
+        });
+        this._ignoreButton.connect('clicked',
+            () => this._onIgnoreButtonClicked().catch(logError));
+        this.add_child(this._ignoreButton);
+    }
+
+    _onDestroy() {
+        this._requestExtensionCookie = null;
+    }
+
+    async _onIgnoreButtonClicked() {
+        if (this._requestExtensionCookie)
+            return;
+
+        try {
+            [this._requestExtensionCookie] = await this._timerChildProxy.RequestExtensionAsync(
+                'login-session',
+                '',
+                0,
+                {},
+                Gio.DBusCallFlags.ALLOW_INTERACTIVE_AUTHORIZATION
+            );
+        } catch (e) {
+            console.warn(`Failed to obtain screen time extension: ${e.message}`);
+        }
+    }
+
+    _onExtensionResponse(proxy, sender, [_, cookie]) {
+        if (this._requestExtensionCookie === null ||
+            cookie !== this._requestExtensionCookie)
+            return;
+
+        this._requestExtensionCookie = null;
+    }
+});
+
+export const DEFAULT_BUTTON_WELL_ANIMATION_TIME = 300;
+
+export const MESSAGE_FADE_OUT_ANIMATION_TIME = 500;
 
 /** @enum {number} */
 export const AuthPromptMode = {
@@ -95,18 +185,27 @@ export const AuthPrompt = GObject.registerClass({
         });
         this.add_child(this._userWell);
 
+        this._inputWell = new St.BoxLayout({
+            style_class: 'login-dialog-prompt-layout',
+            orientation: Clutter.Orientation.VERTICAL,
+            x_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+        });
+        this.add_child(this._inputWell);
+        this._mainContent = this._inputWell;
+
         this._hasCancelButton = this._mode === AuthPromptMode.UNLOCK_OR_LOG_IN;
 
         this._initInputRow();
 
-        let capsLockPlaceholder = new St.Label();
-        this.add_child(capsLockPlaceholder);
+        const capsLockPlaceholder = new St.Label();
+        this._inputWell.add_child(capsLockPlaceholder);
 
         this._capsLockWarningLabel = new ShellEntry.CapsLockWarning({
             x_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
         });
-        this.add_child(this._capsLockWarningLabel);
+        this._inputWell.add_child(this._capsLockWarningLabel);
 
         this._capsLockWarningLabel.bind_property('visible',
             capsLockPlaceholder, 'visible',
@@ -122,7 +221,7 @@ export const AuthPrompt = GObject.registerClass({
         });
         this._message.clutter_text.line_wrap = true;
         this._message.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
-        this.add_child(this._message);
+        this._inputWell.add_child(this._message);
     }
 
     _createUserVerifier(gdmClient, params) {
@@ -150,7 +249,7 @@ export const AuthPrompt = GObject.registerClass({
             style_class: 'login-dialog-button-box',
             orientation: Clutter.Orientation.HORIZONTAL,
         });
-        this.add_child(this._mainBox);
+        this._inputWell.add_child(this._mainBox);
 
         this.cancelButton = new St.Button({
             style_class: 'login-dialog-button cancel-button',
@@ -189,7 +288,7 @@ export const AuthPrompt = GObject.registerClass({
         });
         this._mainBox.add_child(this._authList);
 
-        let entryParams = {
+        const entryParams = {
             style_class: 'login-dialog-prompt-entry',
             can_focus: true,
             x_expand: true,
@@ -213,7 +312,7 @@ export const AuthPrompt = GObject.registerClass({
             scale_x: 0,
         });
 
-        this.add_child(this._timedLoginIndicator);
+        this._inputWell.add_child(this._timedLoginIndicator);
 
         [this._textEntry, this._passwordEntry].forEach(entry => {
             entry.clutter_text.connect('text-changed', () => {
@@ -222,7 +321,7 @@ export const AuthPrompt = GObject.registerClass({
             });
 
             entry.clutter_text.connect('activate', () => {
-                let shouldSpin = entry === this._passwordEntry;
+                const shouldSpin = entry === this._passwordEntry;
                 if (entry.reactive)
                     this._activateNext(shouldSpin);
             });
@@ -244,7 +343,7 @@ export const AuthPrompt = GObject.registerClass({
     }
 
     showTimedLoginIndicator(time) {
-        let hold = new Batch.Hold();
+        const hold = new Batch.Hold();
 
         this.hideTimedLoginIndicator();
 
@@ -432,7 +531,7 @@ export const AuthPrompt = GObject.registerClass({
             !actor)
             return;
 
-        let oldActor = this._defaultButtonWellActor;
+        const oldActor = this._defaultButtonWellActor;
 
         if (oldActor)
             oldActor.remove_all_transitions();
@@ -520,21 +619,21 @@ export const AuthPrompt = GObject.registerClass({
         this._authList.set({
             opacity: 0,
             visible: true,
-            reactive: false,
         });
+        this.updateSensitivity(false);
         this._authList.ease({
             opacity: 255,
             duration: MESSAGE_FADE_OUT_ANIMATION_TIME,
             transition: Clutter.AnimationMode.EASE_OUT_QUAD,
-            onComplete: () => (this._authList.reactive = true),
+            onComplete: () => this.updateSensitivity(true),
         });
     }
 
     setChoiceList(promptMessage, choiceList) {
         this._authList.clear();
         this._authList.label.text = promptMessage;
-        for (let key in choiceList) {
-            let text = choiceList[key];
+        for (const key in choiceList) {
+            const text = choiceList[key];
             this._authList.addItem(key, text);
         }
 
@@ -593,18 +692,25 @@ export const AuthPrompt = GObject.registerClass({
     }
 
     updateSensitivity(sensitive) {
-        if (this._entry.reactive === sensitive)
+        let authWidget;
+
+        if (this._authList.visible)
+            authWidget = this._authList;
+        else
+            authWidget = this._entry;
+
+        if (authWidget.reactive === sensitive)
             return;
 
-        this._entry.reactive = sensitive;
+        authWidget.reactive = sensitive;
 
         if (sensitive) {
-            this._entry.grab_key_focus();
+            authWidget.grab_key_focus();
         } else {
             this.grab_key_focus();
 
-            if (this._entry === this._passwordEntry)
-                this._entry.password_visible = false;
+            if (authWidget === this._passwordEntry)
+                authWidget.password_visible = false;
         }
     }
 
@@ -620,11 +726,11 @@ export const AuthPrompt = GObject.registerClass({
     }
 
     setUser(user) {
-        let oldChild = this._userWell.get_child();
+        const oldChild = this._userWell.get_child();
         if (oldChild)
             oldChild.destroy();
 
-        let userWidget = new UserWidget.UserWidget(user, Clutter.Orientation.VERTICAL);
+        const userWidget = new UserWidget.UserWidget(user, Clutter.Orientation.VERTICAL);
         this._userWell.set_child(userWidget);
 
         if (!user)
@@ -632,7 +738,7 @@ export const AuthPrompt = GObject.registerClass({
     }
 
     reset() {
-        let oldStatus = this.verificationStatus;
+        const oldStatus = this.verificationStatus;
         this.verificationStatus = AuthPromptStatus.NOT_VERIFYING;
         this.cancelButton.reactive = this._hasCancelButton;
         this.cancelButton.can_focus = this._hasCancelButton;
@@ -684,6 +790,28 @@ export const AuthPrompt = GObject.registerClass({
         this._entry.clutter_text.insert_unichar(unichar);
     }
 
+    /*
+     * Set whether to block the authentication with the parental controls shield.
+     *
+     * @param {boolean} shouldBlock Whether to block the authentication
+     */
+    setAuthBlocked(shouldBlock) {
+        if (!this._parentalControlsShield)
+            this._parentalControlsShield = new ParentalControlsShield();
+
+        const newMainContent = shouldBlock
+            ? this._parentalControlsShield
+            : this._inputWell;
+
+        if (newMainContent !== this._mainContent) {
+            this.replace_child(this._mainContent, newMainContent);
+            this._mainContent = newMainContent;
+        }
+
+        if (this._mainContent === this._inputWell)
+            this._entry.grab_key_focus();
+    }
+
     begin(params) {
         params = Params.parse(params, {
             userName: null,
@@ -707,7 +835,7 @@ export const AuthPrompt = GObject.registerClass({
             return;
         }
 
-        let signalId = this._userVerifier.connect('no-more-messages', () => {
+        const signalId = this._userVerifier.connect('no-more-messages', () => {
             this._userVerifier.disconnect(signalId);
             this._userVerifier.clear();
             onComplete();

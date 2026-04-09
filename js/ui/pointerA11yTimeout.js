@@ -1,6 +1,5 @@
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
-import Meta from 'gi://Meta';
 import St from 'gi://St';
 import * as Main from './main.js';
 import Cairo from 'gi://cairo';
@@ -42,17 +41,17 @@ const PieTimer = GObject.registerClass({
     }
 
     vfunc_repaint() {
-        let node = this.get_theme_node();
-        let backgroundColor = node.get_color('-pie-background-color');
-        let borderColor = node.get_color('-pie-border-color');
-        let borderWidth = node.get_length('-pie-border-width');
-        let [width, height] = this.get_surface_size();
-        let radius = Math.min(width / 2, height / 2);
+        const node = this.get_theme_node();
+        const backgroundColor = node.get_color('-pie-background-color');
+        const borderColor = node.get_color('-pie-border-color');
+        const borderWidth = node.get_length('-pie-border-width');
+        const [width, height] = this.get_surface_size();
+        const radius = Math.min(width / 2, height / 2);
 
-        let startAngle = 3 * Math.PI / 2;
-        let endAngle = startAngle + this._angle;
+        const startAngle = 3 * Math.PI / 2;
+        const endAngle = startAngle + this._angle;
 
-        let cr = this.get_context();
+        const cr = this.get_context();
         cr.setLineCap(Cairo.LineCap.ROUND);
         cr.setLineJoin(Cairo.LineJoin.ROUND);
         cr.translate(width / 2, height / 2);
@@ -113,7 +112,7 @@ export class PointerA11yTimeout {
         const seat = global.stage.context.get_backend().get_default_seat();
 
         seat.connect('ptr-a11y-timeout-started', (o, type, timeout) => {
-            let [x, y] = global.get_pointer();
+            const [x, y] = global.get_pointer();
 
             this._pieTimer = new PieTimer();
             Main.uiGroup.add_child(this._pieTimer);
@@ -123,7 +122,7 @@ export class PointerA11yTimeout {
             this._pieTimer.start(x, y, timeout);
 
             if (type === Clutter.PointerA11yTimeoutType.GESTURE)
-                global.display.set_cursor(Meta.Cursor.CROSSHAIR);
+                global.stage.set_cursor_type(Clutter.CursorType.CROSSHAIR);
         });
 
         seat.connect('ptr-a11y-timeout-stopped', (o, type, clicked) => {
@@ -131,7 +130,7 @@ export class PointerA11yTimeout {
                 this._pieTimer?.destroy();
 
             if (type === Clutter.PointerA11yTimeoutType.GESTURE)
-                global.display.set_cursor(Meta.Cursor.DEFAULT);
+                global.stage.set_cursor_type(Clutter.CursorType.DEFAULT);
         });
     }
 }

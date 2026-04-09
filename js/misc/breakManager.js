@@ -26,6 +26,7 @@ import Cogl from 'gi://Cogl';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -194,7 +195,10 @@ export const BreakManager = GObject.registerClass({
     }
 
     _startStateMachine() {
-        this._idleWatchId = this._idleMonitor.add_idle_watch(MIN_BREAK_LENGTH_SECONDS * 1000, this._onIdleWatch.bind(this));
+        this._idleWatchId = this._idleMonitor.add_idle_watch_full(
+            MIN_BREAK_LENGTH_SECONDS * 1000,
+            this._onIdleWatch.bind(this),
+            Meta.IdleMonitorWatchFlags.UNINHIBITABLE | Meta.IdleMonitorWatchFlags.START_NOW);
 
         this._state = BreakState.ACTIVE;
         this._currentBreakType = null;
@@ -409,7 +413,7 @@ export const BreakManager = GObject.registerClass({
     getNextBreakDue(fromTime) {
         let maxDuration = 0;
         let maxDurationType = null;
-        let dueBreakTypes = [];
+        const dueBreakTypes = [];
         let nextDueTime = 0;
 
         console.debug(`BreakManager: Current time: ${fromTime}s`);
@@ -805,7 +809,7 @@ class BreakDispatcher extends GObject.Object {
 
                 if (this._countdownTimerId !== 0)
                     GLib.source_remove(this._countdownTimerId);
-                this._countdownTimerId = GLib.timeout_add_seconds(
+                this._countdownTimerId = GLib.timeout_add_seconds_once(
                     GLib.PRIORITY_DEFAULT,
                     countdownStart, () => {
                         if (this._countdownOsd == null) {
@@ -814,7 +818,6 @@ class BreakDispatcher extends GObject.Object {
                                 () => (this._countdownOsd = null));
                         }
                         this._countdownTimerId = 0;
-                        return GLib.SOURCE_REMOVE;
                     });
             }
 
@@ -1035,11 +1038,10 @@ class BreakNotificationSource extends GObject.Object {
 
         console.debug(`BreakNotificationSource: Scheduling notification state update in ${timeoutSeconds}s`);
 
-        this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, timeoutSeconds, () => {
+        this._timerId = GLib.timeout_add_seconds_once(GLib.PRIORITY_DEFAULT, timeoutSeconds, () => {
             this._timerId = 0;
             console.debug('BreakNotificationSource: Scheduled notification state update');
             this._updateState();
-            return GLib.SOURCE_REMOVE;
         });
     }
 
@@ -1464,7 +1466,7 @@ class OsdBreakCountdownLabel extends St.Widget {
     }
 
     _position() {
-        let workArea = Main.layoutManager.getWorkAreaForMonitor(Main.layoutManager.primaryIndex);
+        const workArea = Main.layoutManager.getWorkAreaForMonitor(Main.layoutManager.primaryIndex);
 
         if (Clutter.get_default_text_direction() === Clutter.TextDirection.RTL)
             this._box.x = workArea.x + (workArea.width - this._box.width);

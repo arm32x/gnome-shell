@@ -36,7 +36,7 @@ class AutomountManager {
             'drive-disconnected', this._onDriveDisconnected.bind(this),
             'drive-eject-button', this._onDriveEjectButton.bind(this), this);
 
-        this._mountAllId = GLib.idle_add(GLib.PRIORITY_DEFAULT, this._startupMountAll.bind(this));
+        this._mountAllId = GLib.idle_add_once(GLib.PRIORITY_DEFAULT, this._startupMountAll.bind(this));
         GLib.Source.set_name_by_id(this._mountAllId, '[gnome-shell] this._startupMountAll');
     }
 
@@ -58,7 +58,7 @@ class AutomountManager {
     }
 
     _startupMountAll() {
-        let volumes = this._volumeMonitor.get_volumes();
+        const volumes = this._volumeMonitor.get_volumes();
         volumes.forEach(volume => {
             this._checkAndMountVolume(volume, {
                 checkSession: false,
@@ -68,7 +68,6 @@ class AutomountManager {
         });
 
         this._mountAllId = 0;
-        return GLib.SOURCE_REMOVE;
     }
 
     _onDriveConnected() {
@@ -77,7 +76,7 @@ class AutomountManager {
         if (!this._session.SessionIsActive)
             return;
 
-        let player = global.display.get_sound_player();
+        const player = global.display.get_sound_player();
         player.play_from_theme('device-added-media',
             _('External drive connected'),
             null);
@@ -89,7 +88,7 @@ class AutomountManager {
         if (!this._session.SessionIsActive)
             return;
 
-        let player = global.display.get_sound_player();
+        const player = global.display.get_sound_player();
         player.play_from_theme('device-removed-media',
             _('External drive disconnected'),
             null);
@@ -163,7 +162,7 @@ class AutomountManager {
         }
 
         if (params.useMountOp) {
-            let operation = new ShellMountOperation.ShellMountOperation(volume);
+            const operation = new ShellMountOperation.ShellMountOperation(volume);
             this._mountVolume(volume, operation, params.allowAutorun);
         } else {
             this._mountVolume(volume, null, params.allowAutorun);
@@ -224,15 +223,15 @@ class AutomountManager {
     }
 
     _reaskPassword(volume) {
-        let prevOperation = this._activeOperations.get(volume);
+        const prevOperation = this._activeOperations.get(volume);
         const existingDialog = prevOperation?.borrowDialog();
-        let operation =
+        const operation =
             new ShellMountOperation.ShellMountOperation(volume, {existingDialog});
         this._mountVolume(volume, operation);
     }
 
     _closeOperation(volume) {
-        let operation = this._activeOperations.get(volume);
+        const operation = this._activeOperations.get(volume);
         if (!operation)
             return;
         operation.close();
@@ -244,10 +243,9 @@ class AutomountManager {
     }
 
     _allowAutorunExpire(volume) {
-        let id = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, AUTORUN_EXPIRE_TIMEOUT_SECS, () => {
+        const id = GLib.timeout_add_seconds_once(GLib.PRIORITY_DEFAULT, AUTORUN_EXPIRE_TIMEOUT_SECS, () => {
             volume.allowAutorun = false;
             delete volume._allowAutorunExpireId;
-            return GLib.SOURCE_REMOVE;
         });
         volume._allowAutorunExpireId = id;
         GLib.Source.set_name_by_id(id, '[gnome-shell] volume.allowAutorun');

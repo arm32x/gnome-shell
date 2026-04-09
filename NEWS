@@ -1,3 +1,157 @@
+50.0
+====
+* Improve accessibility of app folders [Sergio; !4109, !4116]
+* Also respect --force-animation flag in remote sessions [Florian; !4118]
+* Fix logout action showing up erroneously [Sebastian; !4121]
+* Fix keyboard layout changing after leaving password entry [Maksim; !4101]
+* Misc. bug fixes and cleanups [Sebastian, Florian, Daniel; !4113, !4114,
+  !4119, !4120, !4128]
+
+Contributors:
+  Sergio Costas Rodriguez, Sebastian Keller, Maksim Mazko, Florian Müllner,
+  Daniel Rusek
+
+Translators:
+  Victoria [pl], Bruce Cowan [en_GB], Ask Hjorth Larsen [da],
+  Christian Kirbach [de]
+
+50.rc
+=====
+* Fix cursor glitch on entry icons [Carlos; !4078]
+* Fix stale folder icon after pinning apps to dash [Shivam; !4088]
+* Improve support for logind inhibitors in system actions [Adrian; !4040]
+* Plugged leaks [Sebastian; !4095, !4098]
+* Misc. bug fixes and cleanups [Carlos, Sebastian, Jordan, Marco, Alessandro,
+  Jonas, Florian; !4068, !4073, !4076, !4079, !4080, !4087, !4084, !4092,
+  !4090, !4070]
+
+Contributors:
+  Alessandro Bono, Carlos Garnacho, Sebastian Keller, Florian Müllner,
+  Jordan Petridis, Shivam, Marco Trevisan (Treviño), Adrian Vovk, Jonas Ådahl
+
+Translators:
+  Efstathios Iosifidis [el], Christian Kirbach [de],
+  Baurzhan Muftakhidinov [kk], luming zh [zh_CN], Asier Saratsua Garmendia [eu],
+  Fran Diéguez [gl], Jiri Grönroos [fi], Anders Jonsson [sv],
+  Balázs Úr [hu], Daniel Mustieles [es], Changwoo Ryu [ko],
+  小山田 純 - Oyamada Jun [ja], Hugo Carvalho [pt]
+
+50.beta
+=======
+* Allow parents to extend screen time limits [Ignacy; !3980, !3999]
+* Do not recreate default folders after they were removed [Sebastian; !4047]
+* Use gnome-software for offline update support [Milan; !4034]
+* Improve discrete GPU detection [Jan200101; !3193]
+* Fix tab focus behavior in quick settings menu [Ramez; !4043]
+* Handle external/locked keyboard layout sources in indicator [Jonas; !3901]
+* Fix screen time tracking with idle inhibitors [Sebastian; !3709]
+* Snap volume slider to 100% when using over-amplification [revisto; !4004]
+* Do not expose password text in IM pre-edits [Joan; !4053]
+* Plugged leak [Sebastian; !4045]
+* Misc. bug fixes and cleanups [Carlos, Sebastian, Florian, Joan, Marco,
+  Gabriel, Ramez; !3952, !4020, !4021, !4044, !4048, !4052, !4054, !4055,
+  !3947, !3885, !4059, !4041, !4046, !4062, !4063, !4057]
+
+Contributors:
+  Milan Crha, Carlos Garnacho, Jan200101, Sebastian Keller, Ignacy Kuchciński,
+  Ramez Medhat, Florian Müllner, Flynn Peck, Gabriel Poliker-Paul, revisto,
+  Joan Torres Lopez, Marco Trevisan (Treviño), Jonas Ådahl
+
+Translators:
+  Martin [sl], BoF ButterflyOfFire [kab], Antonio Marin [ro], Sabri Ünal [tr],
+  Kjartan Maraas [nb], Flynn Peck [kw], Rafael Fontenelle [pt_BR],
+  Ekaterine Papava [ka], Quentin PAGÈS [oc], Yuri Chornoivan [uk],
+  Artur S0 [ru], Cheng-Chia Tseng [zh_TW], Abduqadir Abliz [ug],
+  Baurzhan Muftakhidinov [kk], Yaron Shahrabani [he],
+  Aurimas Aurimas Černius [lt], Aefgh Threenine [th], twlvnn kraftwerk [bg],
+  Victor Dargallo [ca], Jean-Marc TISSIERES [fr], Danial Behzadi [fa],
+  Seiji Iizuka [ja], Daniel Rusek [cs]
+
+50.alpha
+========
+* Fix lock screen notification setting for MPRIS clients without DesktopEntry
+  [Sebastian K.; !3921]
+* Fix wrong network icon on connectivity loss [Antoine; !3910]
+* Sort session list on login screen by display name [Balló; !3920]
+* Add extended OSK layouts for German and Austrian [Leonidas; !3923]
+* Fix leaving VPN auth helper zombie processes [Michael; !3926]
+* Fix freeze on modifier-only layout switch shortcut [Sebastian K.; !3939]
+* Show OSD for any attempted brightness change [Sebastian W.; !3941]
+* Use slider as bias when auto brightness is being used [Sebastian W.; !3935]
+* Fix glitch in list search results [Florian; !3951]
+* Continue transition from raw event handling to ClutterGesture [Carlos; !3912]
+* Adapt to removal of X11 mutter backend [Bilal; !3768]
+* Lock screen when reaching screen time limit in a child session [Ignacy; !3841]
+* Fix activating app-switcher thumbnails via click [Håkon; !3959]
+* Fix swipe gestures behaving erroneously in RTL locales [Florian; !3967]
+* Disable internal commands if parental controls are enabled [Philip; !3968]
+* Fix misplaced separator in dash after unpinning running app [Raghuveer; !1973]
+* Fix glitch when (re)expanding notification group [SymphonySimper; !3978]
+* Add extension support to test-tool [Florian; !3986]
+* Fix lost focus on lock screen after resume from suspend [Lukas; !3962]
+* Correctly expose/hide caps-lock warning to a11y tree [Lukáš; !3981]
+* Stop recording when reissuing screencast shortcut [Ian; !3847]
+* Indicate non-default power mode in top bar [Florian; !3961]
+* Improve accessibility of icon buttons in screenshot tool [Lukáš; !3893]
+* Fix user deselection after idle on login screen [Lukas; !3993]
+* Improve readability of insensitive text [Sam; !3998]
+* Use default color for muted microphone indicator [revisto; !4001]
+* Show notification when allowed screen time is almost up [Ignacy; !3977]
+* Add async ease variants [Florian; !3948]
+* Support week-start-day setting [Evan; !4026]
+* Fixed crash [Sebastian K.; !3933]
+* Misc. bug fixes and cleanups [Florian, Davide, Sebastian K., Leonidas, Ignacy,
+  Jonas, ClarityStorm, Carlos, Alessandro, Marco, Adrian, Philip, Sebastian W.,
+  Debarshi, Hari, revisto, Takao, sudigit, Julian; !3916, !3903, !3919, !3922,
+  !3925, !3918, !3931, !3927, !3932, !3924, !3937, !3930, !3929, !3940, !3942,
+  !3945, !3946, !3943, !3950, !3938, !3954, !3708, !3958, !3917, !3964, !3971,
+  !3973, !3983, !3982, !3987, !3985, !3989, !3988, !3994, !3944, !3991, !3996,
+  !3995, !3992, !3997, !4000, !4005, !4007, !3784, !4027, !4016, !3979, !4018,
+  !4032, !4031, !4037]
+
+Contributors:
+  Leonidas Adaktylos, Alessandro Bono, Michael Catanzaro, ClarityStorm,
+  Bilal Elmoussaoui, Davide Ferracin, Takao Fujiwara, Carlos Garnacho,
+  Balló György, Sam Hewitt, Håkon Hægland, Raghuveer Kasaraneni,
+  Sebastian Keller, Ignacy Kuchciński, Antoine Lassagne, Florian Müllner,
+  Ian Off, Evan Paterakis, Hari Rana, Debarshi Ray, revisto, Lukas Schmelting,
+  Julian Sparber, sudigit, SymphonySimper, Marco Trevisan (Treviño),
+  Lukáš Tyrychtr, Adrian Vovk, Sebastian Wick, Philip Withnall, Jonas Ådahl
+
+Translators:
+  Martin [sl], Nathan Follens [nl], Efstathios Iosifidis [el],
+  Makoto Sakaguchi [ja], Emin Tufan Çetin [tr], سبحان [fa],
+  Quentin PAGÈS [oc], Cheng-Chia Tseng [zh_TW], Artur S0 [ru],
+  Andika Triwidada [id], Asier Saratsua Garmendia [eu], Antonio Marin [ro],
+  Hugo Carvalho [pt], Baxrom Raxmatov [uz], Emilio Sepúlveda [ia],
+  Baurzhan Muftakhidinov [kk], Kjartan Maraas [nb], Ibai Oihanguren Sala [eu]
+
+49.1
+====
+* Fix freeze when dragging quick settings sliders on touch [Daniel; !3887]
+* Fix key focus on choice list on login screen [Marco; !3849]
+* Fix animation glitch when cancelling overview search [Noam; !3888]
+* Also send activation token for notifications without app [Marco; !3891]
+* Unify warning styling in dialogs [Marco; !3897]
+* Update keyboard indicator on modifier-only layout switches [Carlos; !3895]
+* Improve accessibility of screenshot UI [Lukáš; !3908]
+* Improve Hindi bolnagri input with on-screen keyboard [Mike; !3911]
+* Do not expire notifications that are about to show [Marco; !3905]
+* Improve accessibility icons on login screen [Jakub; !3909]
+* Make media messages follow notification policy [Florian; !3896]
+* Misc. bug fixes and cleanups [Florian, SimonMaracine, Daniel, Marco; !3889,
+  !3894, !3892, !3898, !3907, !3904]
+
+Contributors:
+  Mike FABIAN, Carlos Garnacho, Florian Müllner, Noam Raz, SimonMaracine,
+  Jakub Steiner, Marco Trevisan (Treviño), Lukáš Tyrychtr, Daniel van Vugt
+
+Translators:
+  Quentin PAGÈS [oc], BoF ButterflyOfFire [kab], Abduqadir Abliz [ug],
+  Милош Поповић [sr, sr@latin], Sabri Ünal [tr],
+  Hugo Carvalho [pt], Jordi Mas [ca], Davide Ferracin [it],
+  twlvnn kraftwerk [bg], Jean-Marc TISSIERES [fr], Fabio Tomat [fur]
+
 49.0
 ====
 * Fix misplaced background menu [Jonas; !3863]

@@ -136,7 +136,7 @@ class FdoNotificationDaemon {
         let [appName, replacesId, appIcon, summary, body, actions, hints, timeout_] = params;
         let id;
 
-        for (let hint in hints) {
+        for (const hint in hints) {
             // unpack the variants
             hints[hint] = hints[hint].deepUnpack();
         }
@@ -188,8 +188,12 @@ class FdoNotificationDaemon {
                 case MessageTray.NotificationDestroyedReason.SOURCE_CLOSED:
                     notificationClosedReason = NotificationClosedReason.APP_CLOSED;
                     break;
+                default:
+                    notificationClosedReason = NotificationClosedReason.UNDEFINED;
+                    break;
                 }
                 this._emitNotificationClosed(id, notificationClosedReason);
+                notification.disconnectObject(this);
             });
         }
 
@@ -207,12 +211,13 @@ class FdoNotificationDaemon {
             acknowledged: false,
         });
         notification.clearActions();
+        notification.disconnectObject(this);
 
         let hasDefaultAction = false;
 
         if (actions.length) {
             for (let i = 0; i < actions.length - 1; i += 2) {
-                let [actionId, label] = [actions[i], actions[i + 1]];
+                const [actionId, label] = [actions[i], actions[i + 1]];
                 if (actionId === 'default') {
                     hasDefaultAction = true;
                 } else {
@@ -225,14 +230,14 @@ class FdoNotificationDaemon {
         }
 
         if (hasDefaultAction) {
-            notification.connect('activated', () => {
+            notification.connectObject('activated', () => {
                 this._emitActivationToken(source, id);
                 this._emitActionInvoked(id, 'default');
-            });
+            }, this);
         } else {
-            notification.connect('activated', () => {
+            notification.connectObject('activated', () => {
                 source.open();
-            });
+            }, this);
         }
 
         switch (hints.urgency) {
@@ -251,7 +256,7 @@ class FdoNotificationDaemon {
         // of the 'transient' hint with hints['transient'] rather than hints.transient
         notification.isTransient = !!hints['transient'];
 
-        let privacyScope = hints['x-gnome-privacy-scope'] || 'user';
+        const privacyScope = hints['x-gnome-privacy-scope'] || 'user';
         notification.privacyScope = privacyScope === 'system'
             ? MessageTray.PrivacyScope.SYSTEM
             : MessageTray.PrivacyScope.USER;
@@ -304,12 +309,10 @@ class FdoNotificationDaemon {
 
     _emitActivationToken(source, id) {
         const context = global.create_app_launch_context(0, -1);
-        const info = source.app?.get_app_info();
-        if (info) {
-            const token = context.get_startup_notify_id(info, []);
-            this._dbusImpl.emit_signal('ActivationToken',
-                GLib.Variant.new('(us)', [id, token]));
-        }
+        const appInfo = source.app?.get_app_info() ?? null;
+        const token = context.get_startup_notify_id(appInfo, []);
+        this._dbusImpl.emit_signal('ActivationToken',
+            GLib.Variant.new('(us)', [id, token]));
     }
 }
 
@@ -355,7 +358,7 @@ class FdoNotificationDaemonSource extends MessageTray.Source {
             this.notify('icon');
         }
 
-        let tracker = Shell.WindowTracker.get_default();
+        const tracker = Shell.WindowTracker.get_default();
         // Acknowledge notifications that are resident and their app has the
         // current focus so that we don't show a banner.
         if (notification.resident && this.app && tracker.focus_app === this.app)
@@ -423,7 +426,7 @@ class GtkNotificationDaemonNotification extends MessageTray.Notification {
         } = notification;
 
         if (priority) {
-            let urgency = PRIORITY_URGENCY_MAP[priority.unpack()];
+            const urgency = PRIORITY_URGENCY_MAP[priority.unpack()];
             this.urgency = urgency !== undefined ? urgency : MessageTray.Urgency.NORMAL;
         } else if (urgent) {
             this.urgency = urgent.unpack()
@@ -462,7 +465,7 @@ class GtkNotificationDaemonNotification extends MessageTray.Notification {
     }
 
     _onButtonClicked(button) {
-        let {action, target} = button;
+        const {action, target} = button;
         this._activateAction(action.unpack(), target);
     }
 
@@ -566,9 +569,9 @@ class GtkNotificationDaemonAppSource extends MessageTray.Source {
     }
 
     serialize() {
-        let notifications = [];
-        for (let notificationId in this._notifications) {
-            let notification = this._notifications[notificationId];
+        const notifications = [];
+        for (const notificationId in this._notifications) {
+            const notification = this._notifications[notificationId];
             notifications.push([notificationId, notification.serialize()]);
         }
         return [this._appId, notifications];
@@ -609,9 +612,9 @@ class GtkNotificationDaemon {
         this._isLoading = true;
 
         try {
-            let value = global.get_persistent_state('a(sa(sv))', 'notifications');
+            const value = global.get_persistent_state('a(sa(sv))', 'notifications');
             if (value) {
-                let sources = value.deepUnpack();
+                const sources = value.deepUnpack();
                 sources.forEach(([appId, notifications]) => {
                     if (notifications.length === 0)
                         return;
@@ -646,9 +649,9 @@ class GtkNotificationDaemon {
         if (this._isLoading)
             return;
 
-        let sources = [];
-        for (let appId in this._sources) {
-            let source = this._sources[appId];
+        const sources = [];
+        for (const appId in this._sources) {
+            const source = this._sources[appId];
             sources.push(source.serialize());
         }
 
@@ -656,7 +659,7 @@ class GtkNotificationDaemon {
     }
 
     AddNotificationAsync(params, invocation) {
-        let [appId, notificationId, notificationSerialized] = params;
+        const [appId, notificationId, notificationSerialized] = params;
 
         let source;
         try {
@@ -671,7 +674,7 @@ class GtkNotificationDaemon {
             throw e;
         }
 
-        let timestamp = GLib.DateTime.new_now_local().to_unix();
+        const timestamp = GLib.DateTime.new_now_local().to_unix();
         notificationSerialized['timestamp'] = new GLib.Variant('x', timestamp);
 
         const notification = new GtkNotificationDaemonNotification(source,
@@ -683,8 +686,8 @@ class GtkNotificationDaemon {
     }
 
     RemoveNotificationAsync(params, invocation) {
-        let [appId, notificationId] = params;
-        let source = this._sources[appId];
+        const [appId, notificationId] = params;
+        const source = this._sources[appId];
         if (source)
             source.removeNotification(notificationId);
 

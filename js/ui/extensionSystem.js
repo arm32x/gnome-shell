@@ -54,8 +54,8 @@ export class ExtensionManager extends Signals.EventEmitter {
         // are enabled after start. If it exists, then the systemd unit will
         // disable extensions should gnome-shell crash.
         // Should the file already exist from a previous login, then this is OK.
-        let disableFilename = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'gnome-shell-disable-extensions']);
-        let disableFile = Gio.File.new_for_path(disableFilename);
+        const disableFilename = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'gnome-shell-disable-extensions']);
+        const disableFile = Gio.File.new_for_path(disableFilename);
         try {
             disableFile.create(Gio.FileCreateFlags.REPLACE_DESTINATION, null);
         } catch (e) {
@@ -65,11 +65,10 @@ export class ExtensionManager extends Signals.EventEmitter {
         const shutdownId = global.connect('shutdown',
             () => disableFile.delete(null));
 
-        GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
+        GLib.timeout_add_seconds_once(GLib.PRIORITY_DEFAULT, 60, () => {
             global.disconnect(shutdownId);
 
             disableFile.delete(null);
-            return GLib.SOURCE_REMOVE;
         });
 
         this._installExtensionUpdates();
@@ -182,7 +181,7 @@ export class ExtensionManager extends Signals.EventEmitter {
     }
 
     async _callExtensionDisable(uuid) {
-        let extension = this.lookup(uuid);
+        const extension = this.lookup(uuid);
         if (!extension)
             return;
 
@@ -199,12 +198,12 @@ export class ExtensionManager extends Signals.EventEmitter {
         //   user disables C
         //   this should: disable E, disable D, disable C, enable D, enable E
 
-        let orderIdx = this._extensionOrder.indexOf(uuid);
-        let order = this._extensionOrder.slice(orderIdx + 1);
-        let orderReversed = order.slice().reverse();
+        const orderIdx = this._extensionOrder.indexOf(uuid);
+        const order = this._extensionOrder.slice(orderIdx + 1);
+        const orderReversed = order.slice().reverse();
 
         for (let i = 0; i < orderReversed.length; i++) {
-            let otherUuid = orderReversed[i];
+            const otherUuid = orderReversed[i];
             try {
                 console.debug(`Temporarily disable extension ${otherUuid}`);
                 this.lookup(otherUuid).stateObj.disable();
@@ -222,7 +221,7 @@ export class ExtensionManager extends Signals.EventEmitter {
         this._unloadExtensionStylesheet(extension);
 
         for (let i = 0; i < order.length; i++) {
-            let otherUuid = order[i];
+            const otherUuid = order[i];
             try {
                 console.debug(`Re-enable extension ${otherUuid}`);
                 // eslint-disable-next-line no-await-in-loop
@@ -242,7 +241,7 @@ export class ExtensionManager extends Signals.EventEmitter {
         if (!this._extensionSupportsSessionMode(uuid))
             return;
 
-        let extension = this.lookup(uuid);
+        const extension = this.lookup(uuid);
         if (!extension)
             return;
 
@@ -276,7 +275,7 @@ export class ExtensionManager extends Signals.EventEmitter {
         if (!this._extensions.has(uuid))
             return false;
 
-        let enabledExtensions = global.settings.get_strv(ENABLED_EXTENSIONS_KEY);
+        const enabledExtensions = global.settings.get_strv(ENABLED_EXTENSIONS_KEY);
         let disabledExtensions = global.settings.get_strv(DISABLED_EXTENSIONS_KEY);
 
         if (disabledExtensions.includes(uuid)) {
@@ -297,7 +296,7 @@ export class ExtensionManager extends Signals.EventEmitter {
             return false;
 
         let enabledExtensions = global.settings.get_strv(ENABLED_EXTENSIONS_KEY);
-        let disabledExtensions = global.settings.get_strv(DISABLED_EXTENSIONS_KEY);
+        const disabledExtensions = global.settings.get_strv(DISABLED_EXTENSIONS_KEY);
 
         if (enabledExtensions.includes(uuid)) {
             enabledExtensions = enabledExtensions.filter(item => item !== uuid);
@@ -336,7 +335,7 @@ export class ExtensionManager extends Signals.EventEmitter {
             return;
         }
 
-        let extension = this.lookup(uuid);
+        const extension = this.lookup(uuid);
         if (!extension)
             return;
 
@@ -346,7 +345,7 @@ export class ExtensionManager extends Signals.EventEmitter {
         if (!this._updateNotified) {
             this._updateNotified = true;
 
-            let source = new ExtensionUpdateSource();
+            const source = new ExtensionUpdateSource();
             Main.messageTray.add(source);
 
             const notification = new MessageTray.Notification({
@@ -361,7 +360,7 @@ export class ExtensionManager extends Signals.EventEmitter {
     }
 
     logExtensionError(uuid, error) {
-        let extension = this.lookup(uuid);
+        const extension = this.lookup(uuid);
         if (!extension)
             return;
 
@@ -464,7 +463,7 @@ export class ExtensionManager extends Signals.EventEmitter {
     async reloadExtension(oldExtension) {
         // Grab the things we'll need to pass to createExtensionObject
         // to reload it.
-        let {uuid, dir, type} = oldExtension;
+        const {uuid, dir, type} = oldExtension;
 
         // Then unload the old extension.
         await this.unloadExtension(oldExtension);
@@ -485,12 +484,12 @@ export class ExtensionManager extends Signals.EventEmitter {
         if (!this._extensionSupportsSessionMode(uuid))
             return false;
 
-        let extension = this.lookup(uuid);
+        const extension = this.lookup(uuid);
         if (!extension)
             throw new Error('Extension was not properly created. Call createExtensionObject first');
 
-        let dir = extension.dir;
-        let extensionJs = dir.get_child('extension.js');
+        const dir = extension.dir;
+        const extensionJs = dir.get_child('extension.js');
         if (!extensionJs.query_exists(null)) {
             this.logExtensionError(uuid, new Error('Missing extension.js'));
             return false;
@@ -531,10 +530,10 @@ export class ExtensionManager extends Signals.EventEmitter {
     }
 
     _updateCanChange(extension) {
-        let isMode = this._getModeExtensions().includes(extension.uuid);
-        let modeOnly = global.settings.get_boolean(DISABLE_USER_EXTENSIONS_KEY);
+        const isMode = this._getModeExtensions().includes(extension.uuid);
+        const modeOnly = global.settings.get_boolean(DISABLE_USER_EXTENSIONS_KEY);
 
-        let changeKey = isMode
+        const changeKey = isMode
             ? DISABLE_USER_EXTENSIONS_KEY
             : ENABLED_EXTENSIONS_KEY;
 
@@ -552,7 +551,7 @@ export class ExtensionManager extends Signals.EventEmitter {
         extensions.sort((a, b) => this._compareExtensions(this.lookup(a), this.lookup(b)));
 
         // filter out 'disabled-extensions' which takes precedence
-        let disabledExtensions = global.settings.get_strv(DISABLED_EXTENSIONS_KEY);
+        const disabledExtensions = global.settings.get_strv(DISABLED_EXTENSIONS_KEY);
         return extensions.filter(item => !disabledExtensions.includes(item));
     }
 
@@ -562,7 +561,7 @@ export class ExtensionManager extends Signals.EventEmitter {
     }
 
     async _onEnabledExtensionsChanged() {
-        let newEnabledExtensions = this._getEnabledExtensions();
+        const newEnabledExtensions = this._getEnabledExtensions();
 
         for (const extension of this._extensions.values()) {
             const wasEnabled = extension.enabled;
@@ -598,7 +597,7 @@ export class ExtensionManager extends Signals.EventEmitter {
     }
 
     _onSettingsWritableChanged() {
-        for (let extension of this._extensions.values()) {
+        for (const extension of this._extensions.values()) {
             this._updateCanChange(extension);
             this.emit('extension-state-changed', extension);
         }
@@ -612,7 +611,7 @@ export class ExtensionManager extends Signals.EventEmitter {
         this._checkVersion = checkVersion;
 
         // Disabling extensions modifies the order array, so use a copy
-        let extensionOrder = this._extensionOrder.slice();
+        const extensionOrder = this._extensionOrder.slice();
 
         // Disable enabled extensions first to avoid
         // the "rebasing" done in _callExtensionDisable...
@@ -657,11 +656,11 @@ export class ExtensionManager extends Signals.EventEmitter {
             return;
 
         for (const {file: dir, info} of FileUtils.collectFromDatadirs('extension-updates', true)) {
-            let fileType = info.get_file_type();
+            const fileType = info.get_file_type();
             if (fileType !== Gio.FileType.DIRECTORY)
                 continue;
-            let uuid = info.get_name();
-            let extensionDir = Gio.File.new_for_path(
+            const uuid = info.get_name();
+            const extensionDir = Gio.File.new_for_path(
                 GLib.build_filenamev([global.userdatadir, 'extensions', uuid]));
 
             try {
@@ -707,23 +706,23 @@ export class ExtensionManager extends Signals.EventEmitter {
 
         this._enabledExtensions = this._getEnabledExtensions();
 
-        let perUserDir = Gio.File.new_for_path(global.userdatadir);
+        const perUserDir = Gio.File.new_for_path(global.userdatadir);
 
         const includeUserDir = global.settings.get_boolean('allow-extension-installation');
         const extensionFiles = [...FileUtils.collectFromDatadirs('extensions', includeUserDir)];
         const extensionObjects = extensionFiles.map(({file: dir, info}) => {
-            let fileType = info.get_file_type();
+            const fileType = info.get_file_type();
             if (fileType !== Gio.FileType.DIRECTORY)
                 return null;
-            let uuid = info.get_name();
-            let existing = this.lookup(uuid);
+            const uuid = info.get_name();
+            const existing = this.lookup(uuid);
             if (existing) {
                 log(`Extension ${uuid} already installed in ${existing.path}. ${dir.get_path()} will not be loaded`);
                 return null;
             }
 
             let extension;
-            let type = dir.has_prefix(perUserDir)
+            const type = dir.has_prefix(perUserDir)
                 ? ExtensionType.PER_USER
                 : ExtensionType.SYSTEM;
             try {

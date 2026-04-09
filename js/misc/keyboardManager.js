@@ -1,7 +1,8 @@
 import GLib from 'gi://GLib';
 import GnomeDesktop from 'gi://GnomeDesktop';
+import Meta from 'gi://Meta';
 
-import * as Main from '../ui/main.js';
+import * as Signals from './signals.js';
 
 export const DEFAULT_LOCALE = 'en_US';
 export const DEFAULT_LAYOUT = 'us';
@@ -29,20 +30,11 @@ export function getKeyboardManager() {
     return _keyboardManager;
 }
 
-export function releaseKeyboard() {
-    if (Main.modalCount > 0)
-        global.backend.unfreeze_keyboard(global.get_current_time());
-    else
-        global.backend.ungrab_keyboard(global.get_current_time());
-}
-
-export function holdKeyboard() {
-    global.backend.freeze_keyboard(global.get_current_time());
-}
-
-class KeyboardManager {
+class KeyboardManager extends Signals.EventEmitter {
     constructor() {
-        // The XKB protocol doesn't allow for more that 4 layouts in a
+        super();
+
+        // The XKB protocol doesn't allow for more than 4 layouts in a
         // keymap. Wayland doesn't impose this limit and libxkbcommon can
         // handle up to 32 layouts but since we need to support X clients
         // even as a Wayland compositor, we can't bump this.
@@ -53,46 +45,85 @@ class KeyboardManager {
         this._localeLayoutInfo = this._getLocaleLayout();
         this._layoutInfos = {};
         this._currentKeymap = null;
+
+        global.backend.connect('keymap-changed', this._onKeymapChanged.bind(this));
+        global.backend.connect('keymap-layout-group-changed', this._onKeymapLayoutGroupChanged.bind(this));
+        global.backend.connect('reset-keymap-description',
+            () => this._ourKeymapDescription);
+        global.backend.connect('reset-keymap-layout-index',
+            () => this._current.groupIndex);
     }
 
-    async _applyLayoutGroup(group) {
-        let options = this._buildOptionsString();
-        let [layouts, variants] = this._buildGroupStrings(group);
-        let model = this._xkbModel;
+    _updateCurrentKeymap(info) {
+        const options = this._buildOptionsString();
+        const [layouts, variants] = this._buildGroupStrings(info.group);
+        const model = this._xkbModel;
 
         if (this._currentKeymap &&
             this._currentKeymap.layouts === layouts &&
             this._currentKeymap.variants === variants &&
             this._currentKeymap.options === options &&
             this._currentKeymap.model === model)
-            return;
+            return false;
 
-        this._currentKeymap = {layouts, variants, options, model};
-        await global.backend.set_keymap_async(layouts, variants, options, model, null);
+        const displayNames = info.group.map(g => g.displayName);
+        const shortNames = info.group.map(g => g.shortName);
+        this._currentKeymap = {
+            layouts,
+            variants,
+            options,
+            model,
+            displayNames,
+            shortNames,
+        };
+        return true;
     }
 
-    async _applyLayoutGroupIndex(idx) {
-        await global.backend.set_keymap_layout_group_async(idx, null);
+    _createKeymapDescription() {
+        return Meta.KeymapDescription.new_from_rules(this._currentKeymap.model,
+            this._currentKeymap.layouts,
+            this._currentKeymap.variants,
+            this._currentKeymap.options,
+            this._currentKeymap.displayNames,
+            this._currentKeymap.shortNames
+        );
     }
 
-    async _doApply(info) {
-        await this._applyLayoutGroup(info.group);
-        await this._applyLayoutGroupIndex(info.groupIndex);
+    _onKeymapChanged() {
+        this._keymapDescription = global.backend.get_keymap_description();
+        this.emit('keymap-changed');
     }
 
-    apply(id) {
-        let info = this._layoutInfos[id];
+    _onKeymapLayoutGroupChanged() {
+        this.emit('keymap-changed');
+    }
+
+    async _doApply(id) {
+        const info = this._layoutInfos[id];
         if (!info)
             return;
 
-        if (this._current && this._current.group === info.group) {
-            if (this._current.groupIndex !== info.groupIndex)
-                this._applyLayoutGroupIndex(info.groupIndex).catch(logError);
-        } else {
-            this._doApply(info).catch(logError);
+        let recreate;
+        if (this._updateCurrentKeymap(info))
+            recreate = true;
+        else if (this.isExternal())
+            recreate = true;
+        else
+            recreate = false;
+
+        if (recreate)
+            this._ourKeymapDescription = this._createKeymapDescription();
+
+        if (recreate || !this._current || this._current.groupIndex !== info.groupIndex) {
+            await global.backend.set_keymap_async(
+                this._ourKeymapDescription, info.groupIndex, null);
         }
 
         this._current = info;
+    }
+
+    apply(id) {
+        this._doApply(id).catch(logError);
     }
 
     reapply() {
@@ -106,25 +137,33 @@ class KeyboardManager {
         this._current = null;
         this._layoutInfos = {};
 
-        for (let i = 0; i < ids.length; ++i) {
-            let [found, , , _layout, _variant] = this._xkbInfo.get_layout_info(ids[i]);
-            if (found)
-                this._layoutInfos[ids[i]] = {id: ids[i], layout: _layout, variant: _variant};
+        for (const id of ids) {
+            const [found, displayName, shortName, layout, variant] =
+                this._xkbInfo.get_layout_info(id);
+            if (found) {
+                this._layoutInfos[id] = {
+                    id,
+                    layout,
+                    variant,
+                    displayName,
+                    shortName,
+                };
+            }
         }
 
         let i = 0;
         let group = [];
-        for (let id in this._layoutInfos) {
+        for (const id in this._layoutInfos) {
             // We need to leave one slot on each group free so that we
             // can add a layout containing the symbols for the
             // language used in UI strings to ensure that toolkits can
             // handle mnemonics like Alt+Ф even if the user is
             // actually typing in a different layout.
-            let groupIndex = i % (this.MAX_LAYOUTS_PER_GROUP - 1);
+            const groupIndex = i % (this.MAX_LAYOUTS_PER_GROUP - 1);
             if (groupIndex === 0)
                 group = [];
 
-            let info = this._layoutInfos[id];
+            const info = this._layoutInfos[id];
             group[groupIndex] = info;
             info.group = group;
             info.groupIndex = groupIndex;
@@ -142,18 +181,18 @@ class KeyboardManager {
         if (!found)
             [, , id] = GnomeDesktop.get_input_source_from_locale(DEFAULT_LOCALE);
 
-        let _layout, _variant;
-        [found, , , _layout, _variant] = this._xkbInfo.get_layout_info(id);
+        let layout, variant;
+        [found, , , layout, variant] = this._xkbInfo.get_layout_info(id);
         if (found)
-            return {layout: _layout, variant: _variant};
+            return {layout, variant};
         else
             return {layout: DEFAULT_LAYOUT, variant: DEFAULT_VARIANT};
     }
 
     _buildGroupStrings(_group) {
-        let group = _group.concat(this._localeLayoutInfo);
-        let layouts = group.map(g => g.layout).join(',');
-        let variants = group.map(g => g.variant).join(',');
+        const group = _group.concat(this._localeLayoutInfo);
+        const layouts = group.map(g => g.layout).join(',');
+        const variants = group.map(g => g.variant).join(',');
         return [layouts, variants];
     }
 
@@ -166,11 +205,35 @@ class KeyboardManager {
     }
 
     _buildOptionsString() {
-        let options = this._xkbOptions.join(',');
+        const options = this._xkbOptions.join(',');
         return options;
     }
 
     get currentLayout() {
         return this._current;
+    }
+
+    get shortName() {
+        const seat = global.stage.context.get_backend().get_default_seat();
+        const keymap = seat.get_keymap();
+        return keymap.get_current_short_name();
+    }
+
+    get displayName() {
+        const seat = global.stage.context.get_backend().get_default_seat();
+        const keymap = seat.get_keymap();
+        return keymap.get_current_display_name();
+    }
+
+    isLocked() {
+        return this._keymapDescription?.is_locked() ?? false;
+    }
+
+    isExternal() {
+        if (!this._keymapDescription)
+            return false;
+        if (!this._ourKeymapDescription)
+            return true;
+        return !this._keymapDescription.direct_equal(this._ourKeymapDescription);
     }
 }

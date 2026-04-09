@@ -42,7 +42,7 @@ const PowerProfilesToggle = GObject.registerClass(
 class PowerProfilesToggle extends QuickMenuToggle {
     _init() {
         super._init({
-            title: _('Power Mode'),
+            title: C_('Quick settings button title', 'Power Mode'),
             menuButtonAccessibleName: _('Open power profiles menu'),
         });
 
@@ -74,7 +74,7 @@ class PowerProfilesToggle extends QuickMenuToggle {
 
         this._profileSection = new PopupMenu.PopupMenuSection();
         this.menu.addMenuItem(this._profileSection);
-        this.menu.setHeader('power-profile-balanced-symbolic', _('Power Mode'));
+        this.menu.setHeader('power-profile-balanced-symbolic', C_('Quick settings menu header', 'Power Mode'));
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         this.menu.addSettingsAction(_('Power Settings'),
             'gnome-power-panel.desktop');
@@ -136,6 +136,17 @@ class Indicator extends SystemIndicator {
     _init() {
         super._init();
 
-        this.quickSettingsItems.push(new PowerProfilesToggle());
+        this._indicator = this._addIndicator();
+
+        this._powerProfilesToggle = new PowerProfilesToggle();
+
+        this._powerProfilesToggle.bind_property('icon-name',
+            this._indicator, 'icon-name',
+            GObject.BindingFlags.SYNC_CREATE);
+        this._powerProfilesToggle.bind_property('checked',
+            this._indicator, 'visible',
+            GObject.BindingFlags.SYNC_CREATE);
+
+        this.quickSettingsItems.push(this._powerProfilesToggle);
     }
 });

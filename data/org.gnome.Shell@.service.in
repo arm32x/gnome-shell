@@ -1,8 +1,7 @@
 [Unit]
-Description=GNOME Shell on X11
-# On X11, try to show the GNOME Session Failed screen
-OnFailure=org.gnome.Shell-disable-extensions.service gnome-session-failed.target
-OnFailureJobMode=replace
+Description=GNOME Shell
+OnFailure=org.gnome.Shell-disable-extensions.service gnome-session-shutdown.target
+OnFailureJobMode=replace-irreversibly
 CollectMode=inactive-or-failed
 RefuseManualStart=on
 RefuseManualStop=on
@@ -13,25 +12,20 @@ Requisite=gnome-session-initialized.target
 PartOf=gnome-session-initialized.target
 Before=gnome-session-initialized.target
 
-ConditionEnvironment=XDG_SESSION_TYPE=%I
-
-# Limit startup frequency more than the default
-StartLimitIntervalSec=15s
-StartLimitBurst=3
+AssertEnvironment=XDG_SESSION_TYPE=wayland
 
 [Service]
 Slice=session.slice
 Type=notify
-ExecStart=@bindir@/gnome-shell
+ExecStart=@bindir@/gnome-shell --mode=%i
 # Exit code 1 means we are probably *not* dealing with an extension failure
 SuccessExitStatus=1
 
-# On X11 we do not need to unset any variables
+# unset some environment variables that were set by the shell and won't work now that the shell is gone
+ExecStopPost=-systemctl --user unset-environment GNOME_SETUP_DISPLAY WAYLAND_DISPLAY DISPLAY XAUTHORITY
 
-# On X11 we want to restart on-success (Alt+F2 + r) and on-failure.
-Restart=always
-# Do not wait before restarting the shell
-RestartSec=0ms
+# On wayland we cannot restart
+Restart=no
 # Kill any stubborn child processes after this long
 TimeoutStopSec=5
 

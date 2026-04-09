@@ -23,8 +23,8 @@ function versionCompare(required, reference) {
     reference = reference.split('.');
 
     for (let i = 0; i < required.length; i++) {
-        let requiredInt = parseInt(required[i]);
-        let referenceInt = parseInt(reference[i]);
+        const requiredInt = parseInt(required[i]);
+        const referenceInt = parseInt(reference[i]);
         if (requiredInt !== referenceInt)
             return requiredInt < referenceInt;
     }
@@ -37,8 +37,8 @@ function versionCompare(required, reference) {
  */
 export function canLock() {
     try {
-        let params = GLib.Variant.new('(ss)', ['org.gnome.DisplayManager.Manager', 'Version']);
-        let result = Gio.DBus.system.call_sync(
+        const params = GLib.Variant.new('(ss)', ['org.gnome.DisplayManager.Manager', 'Version']);
+        const result = Gio.DBus.system.call_sync(
             'org.gnome.DisplayManager',
             '/org/gnome/DisplayManager/Manager',
             'org.freedesktop.DBus.Properties',
@@ -46,7 +46,7 @@ export function canLock() {
             Gio.DBusCallFlags.NONE,
             -1, null);
 
-        let version = result.deepUnpack()[0].deepUnpack();
+        const version = result.deepUnpack()[0].deepUnpack();
         return haveSystemd() && versionCompare('3.5.91', version);
     } catch {
         return false;
@@ -61,13 +61,31 @@ export async function registerSessionWithGDM() {
             '/org/gnome/DisplayManager/Manager',
             'org.gnome.DisplayManager.Manager',
             'RegisterSession',
-            GLib.Variant.new('(a{sv})', [{}]), null,
+            null, null,
             Gio.DBusCallFlags.NONE, -1, null);
     } catch (e) {
         if (!e.matches(Gio.DBusError, Gio.DBusError.UNKNOWN_METHOD))
             log(`Error registering session with GDM: ${e.message}`);
         else
             log('Not calling RegisterSession(): method not exported, GDM too old?');
+    }
+}
+
+export async function registerDisplayWithGDM() {
+    log('Registering display with GDM');
+    try {
+        await Gio.DBus.system.call(
+            'org.gnome.DisplayManager',
+            '/org/gnome/DisplayManager/Manager',
+            'org.gnome.DisplayManager.Manager',
+            'RegisterDisplay',
+            null, null,
+            Gio.DBusCallFlags.NONE, -1, null);
+    } catch (e) {
+        if (!e.matches(Gio.DBusError, Gio.DBusError.UNKNOWN_METHOD))
+            log(`Error registering display with GDM: ${e.message}`);
+        else
+            log('Not calling RegisterDisplay(): method not exported, GDM too old?');
     }
 }
 
@@ -127,56 +145,26 @@ class LoginManagerSystemd extends Signals.EventEmitter {
         let sessionId = GLib.getenv('XDG_SESSION_ID');
         if (!sessionId) {
             log('Unset XDG_SESSION_ID, getCurrentSessionProxy() called outside a user session. Asking logind directly.');
-            const userProxy = await this.getCurrentUserProxy();
-            let [session, objectPath] = userProxy.Display;
-            if (session) {
-                log(`Will monitor session ${session}`);
-                sessionId = session;
-            } else {
-                log('Failed to find "Display" session; are we the greeter?');
-
-                for ([session, objectPath] of userProxy.Sessions) {
-                    let sessionProxy = new SystemdLoginSession(Gio.DBus.system,
-                        'org.freedesktop.login1',
-                        objectPath);
-                    log(`Considering ${session}, class=${sessionProxy.Class}`);
-                    if (sessionProxy.Class === 'greeter') {
-                        log(`Yes, will monitor session ${session}`);
-                        sessionId = session;
-                        break;
-                    }
-                }
-
-                if (!sessionId) {
-                    log('No, failed to get session from logind.');
-                    return null;
-                }
+            try {
+                const autoSession = await SystemdLoginSession.newAsync(
+                    Gio.DBus.system, 'org.freedesktop.login1', '/org/freedesktop/login1/session/auto');
+                sessionId = autoSession.Id;
+            } catch (error) {
+                logError(error, 'Failed to get session from logind');
+                return null;
             }
         }
 
+        log(`Will monitor session ${sessionId}`);
         try {
             const [objectPath] = await this._proxy.GetSessionAsync(sessionId);
             this._currentSession = await SystemdLoginSession.newAsync(
                 Gio.DBus.system, 'org.freedesktop.login1', objectPath);
             return this._currentSession;
         } catch (error) {
-            logError(error, 'Could not get a proxy for the current session');
+            logError(error, `Could not get proxy for session ${sessionId}`);
             return null;
         }
-    }
-
-    async canSuspend() {
-        let canSuspend, needsAuth;
-
-        try {
-            const [result] = await this._proxy.CanSuspendAsync();
-            needsAuth = result === 'challenge';
-            canSuspend = needsAuth || result === 'yes';
-        } catch {
-            canSuspend = false;
-            needsAuth = false;
-        }
-        return {canSuspend, needsAuth};
     }
 
     async canRebootToBootLoaderMenu() {
@@ -209,10 +197,6 @@ class LoginManagerSystemd extends Signals.EventEmitter {
 
     getSession(objectPath) {
         return new SystemdLoginSession(Gio.DBus.system, 'org.freedesktop.login1', objectPath);
-    }
-
-    suspend() {
-        this._proxy.SuspendAsync(true);
     }
 
     async inhibit(reason, cancellable) {
@@ -266,13 +250,6 @@ class LoginManagerDummy extends Signals.EventEmitter  {
         return new Promise(() => {});
     }
 
-    canSuspend() {
-        return new Promise(resolve => resolve({
-            canSuspend: false,
-            needsAuth: false,
-        }));
-    }
-
     canRebootToBootLoaderMenu() {
         return new Promise(resolve => resolve({
             canRebootToBootLoaderMenu: false,
@@ -289,13 +266,6 @@ class LoginManagerDummy extends Signals.EventEmitter  {
 
     getSession(_objectPath) {
         return null;
-    }
-
-    suspend() {
-        this._preparingForSleep = true;
-        this.emit('prepare-for-sleep', true);
-        this._preparingForSleep = false;
-        this.emit('prepare-for-sleep', false);
     }
 
     get preparingForSleep() {

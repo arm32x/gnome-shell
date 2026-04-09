@@ -8,6 +8,7 @@ import * as Batch from './batch.js';
 import * as OVirt from './oVirt.js';
 import * as Vmware from './vmware.js';
 import * as Main from '../ui/main.js';
+import {logErrorUnlessCancelled} from '../misc/errorUtils.js';
 import {loadInterfaceXML} from '../misc/fileUtils.js';
 import * as Params from '../misc/params.js';
 import * as SmartcardManager from '../misc/smartcardManager.js';
@@ -26,7 +27,7 @@ Gio._promisify(Gdm.UserVerifierProxy.prototype, 'call_begin_verification');
 export const PASSWORD_SERVICE_NAME = 'gdm-password';
 export const FINGERPRINT_SERVICE_NAME = 'gdm-fingerprint';
 export const SMARTCARD_SERVICE_NAME = 'gdm-smartcard';
-const CLONE_FADE_ANIMATION_TIME = 250;
+export const CLONE_FADE_ANIMATION_TIME = 250;
 
 export const LOGIN_SCREEN_SCHEMA = 'org.gnome.login-screen';
 export const PASSWORD_AUTHENTICATION_KEY = 'enable-password-authentication';
@@ -42,7 +43,10 @@ export const LOGO_KEY = 'logo';
 export const DISABLE_USER_LIST_KEY = 'disable-user-list';
 
 // Give user 48ms to read each character of a PAM message
+// or 2 seconds, whichever is longer
 const USER_READ_TIME = 48;
+const USER_READ_TIME_MIN = 2000;
+
 const FINGERPRINT_SERVICE_PROXY_TIMEOUT = 5000;
 const FINGERPRINT_ERROR_TIMEOUT_WAIT = 15;
 
@@ -81,10 +85,10 @@ export function cloneAndFadeOutActor(actor) {
 
     Main.uiGroup.add_child(clone);
 
-    let [x, y] = actor.get_transformed_position();
+    const [x, y] = actor.get_transformed_position();
     clone.set_position(x, y);
 
-    let hold = new Batch.Hold();
+    const hold = new Batch.Hold();
     clone.ease({
         opacity: 0,
         duration: CLONE_FADE_ANIMATION_TIME,
@@ -146,7 +150,7 @@ export class ShellUserVerifier extends Signals.EventEmitter {
     }
 
     removeCredentialManager(serviceName) {
-        let credentialManager = this._credentialManagers[serviceName];
+        const credentialManager = this._credentialManagers[serviceName];
         if (!credentialManager)
             return;
 
@@ -196,12 +200,9 @@ export class ShellUserVerifier extends Signals.EventEmitter {
     _clearUserVerifier() {
         if (this._userVerifier) {
             this._disconnectSignals();
-            this._userVerifier.run_dispose();
+            this._userVerifier.get_connection().disconnectObject(this);
             this._userVerifier = null;
-            if (this._userVerifierChoiceList) {
-                this._userVerifierChoiceList.run_dispose();
-                this._userVerifierChoiceList = null;
-            }
+            this._userVerifierChoiceList = null;
         }
     }
 
@@ -227,7 +228,7 @@ export class ShellUserVerifier extends Signals.EventEmitter {
 
         this._fingerprintManager = null;
 
-        for (let service in this._credentialManagers)
+        for (const service in this._credentialManagers)
             this.removeCredentialManager(service);
     }
 
@@ -240,8 +241,7 @@ export class ShellUserVerifier extends Signals.EventEmitter {
             await this._handlePendingMessages();
             this._userVerifier.call_answer_query(serviceName, answer, this._cancellable, null);
         } catch (e) {
-            if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
-                logError(e);
+            logErrorUnlessCancelled(e);
         }
     }
 
@@ -250,7 +250,7 @@ export class ShellUserVerifier extends Signals.EventEmitter {
             return 0;
 
         // We probably could be smarter here
-        return message.length * USER_READ_TIME;
+        return Math.max(message.length * USER_READ_TIME, USER_READ_TIME_MIN);
     }
 
     finishMessageQueue() {
@@ -288,7 +288,7 @@ export class ShellUserVerifier extends Signals.EventEmitter {
         delete this._currentMessageExtraInterval;
         this.emit('show-message', message.serviceName, message.text, message.type);
 
-        this._messageQueueTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+        this._messageQueueTimeoutId = GLib.timeout_add_once(GLib.PRIORITY_DEFAULT,
             message.interval + (this._currentMessageExtraInterval | 0), () => {
                 this._messageQueueTimeoutId = 0;
 
@@ -298,14 +298,12 @@ export class ShellUserVerifier extends Signals.EventEmitter {
                 } else {
                     this.finishMessageQueue();
                 }
-
-                return GLib.SOURCE_REMOVE;
             });
         GLib.Source.set_name_by_id(this._messageQueueTimeoutId, '[gnome-shell] this._queueMessageTimeout');
     }
 
     _queueMessage(serviceName, message, messageType) {
-        let interval = this._getIntervalForMessage(message);
+        const interval = this._getIntervalForMessage(message);
 
         this._messageQueue.push({serviceName, text: message, type: messageType, interval});
         this._queueMessageTimeout();
@@ -505,6 +503,8 @@ export class ShellUserVerifier extends Signals.EventEmitter {
             this._clearUserVerifier();
             this._userVerifier = await this._client.open_reauthentication_channel(
                 userName, this._cancellable);
+            this._userVerifier.get_connection().connectObject('closed',
+                () => this.clear(), this);
         } catch (e) {
             if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                 return;
@@ -537,6 +537,8 @@ export class ShellUserVerifier extends Signals.EventEmitter {
             this._clearUserVerifier();
             this._userVerifier =
                 await this._client.get_user_verifier(this._cancellable);
+            this._userVerifier.get_connection().connectObject('closed',
+                () => this.clear(), this);
         } catch (e) {
             if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                 return;
@@ -592,7 +594,7 @@ export class ShellUserVerifier extends Signals.EventEmitter {
     }
 
     foregroundServiceDeterminesUsername() {
-        for (let serviceName in this._credentialManagers) {
+        for (const serviceName in this._credentialManagers) {
             if (this.serviceIsForeground(serviceName))
                 return true;
         }
@@ -762,12 +764,11 @@ export class ShellUserVerifier extends Signals.EventEmitter {
                     GLib.source_remove(this._fingerprintFailedId);
 
                 const cancellable = this._cancellable;
-                this._fingerprintFailedId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+                this._fingerprintFailedId = GLib.timeout_add_once(GLib.PRIORITY_DEFAULT,
                     FINGERPRINT_ERROR_TIMEOUT_WAIT, () => {
                         this._fingerprintFailedId = 0;
                         if (!cancellable.is_cancelled())
                             this._verificationFailed(serviceName, false);
-                        return GLib.SOURCE_REMOVE;
                     });
             }
         }
@@ -858,8 +859,7 @@ export class ShellUserVerifier extends Signals.EventEmitter {
                 this._retry(serviceName);
             }
         } catch (e) {
-            if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
-                logError(e);
+            logErrorUnlessCancelled(e);
         }
     }
 
@@ -869,7 +869,7 @@ export class ShellUserVerifier extends Signals.EventEmitter {
 
         const cancellable = this._cancellable;
         return new Promise((resolve, reject) => {
-            let signalId = this.connect('no-more-messages', () => {
+            const signalId = this.connect('no-more-messages', () => {
                 this.disconnect(signalId);
                 if (cancellable.is_cancelled())
                     reject(new GLib.Error(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED, 'Operation was cancelled'));

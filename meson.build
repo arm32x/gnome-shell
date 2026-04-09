@@ -1,5 +1,5 @@
 project('gnome-shell', 'c',
-  version: '49.0',
+  version: '50.0',
   meson_version: '>= 1.3.0',
   license: 'GPL-2.0-or-later',
 )
@@ -10,7 +10,7 @@ split_version = meson.project_version().split('.')
 # the Cogl and Clutter libraries also use this API version.
 # The API version is increased each development cycle,
 # starting with 0 in 3.23.x
-mutter_api_version = '17'
+mutter_api_version = '18'
 
 clutter_pc = 'mutter-clutter-' + mutter_api_version
 cogl_pc = 'mutter-cogl-' + mutter_api_version
@@ -22,11 +22,11 @@ ecal_req = '>= 3.33.1'
 eds_req = '>= 3.33.1'
 gcr_req = '>= 3.90.0'
 gio_req = '>= 2.86.0'
-gjs_req = '>= 1.85.90'
+gjs_req = '>= 1.87.1'
 gtk_req = '>= 4.0'
-mutter_req = '>= 49.0'
+mutter_req = '>= 50.0'
 polkit_req = '>= 0.100'
-schemas_req = '>= 49.alpha'
+schemas_req = '>= 50.alpha'
 systemd_req = '>= 246'
 gnome_desktop_req = '>= 40'
 pipewire_req = '>= 0.3.49'
@@ -88,9 +88,8 @@ gnome_desktop_dep = dependency('gnome-desktop-4', version: gnome_desktop_req)
 pango_dep = dependency('pango', version: pango_req)
 
 have_fonts = mutter_dep.get_variable('have_fonts') == 'true'
-have_x11 = mutter_dep.get_variable('have_x11') == 'true'
-have_x11_client = mutter_dep.get_variable('have_x11_client') == 'true'
-if have_x11_client or have_x11
+have_xwayland = mutter_dep.get_variable('have_xwayland') == 'true'
+if have_xwayland
   x11_dep = dependency('x11')
   xext_dep = dependency('xext')
   xfixes_dep = dependency('xfixes')
@@ -157,8 +156,7 @@ cdata.set_quoted('PACKAGE_VERSION', meson.project_version())
 cdata.set('HAVE_NETWORKMANAGER', have_networkmanager)
 cdata.set('HAVE_PIPEWIRE', have_pipewire)
 cdata.set('HAVE_SYSTEMD', have_systemd)
-cdata.set('HAVE_X11', have_x11)
-cdata.set('HAVE_X11_CLIENT', have_x11_client)
+cdata.set('HAVE_XWAYLAND', have_xwayland)
 
 cdata.set('HAVE_FDWALK', cc.has_function('fdwalk'))
 cdata.set('HAVE_MALLINFO', cc.has_function('mallinfo'))
@@ -318,7 +316,7 @@ subdir('js')
 subdir('src')
 subdir('po')
 
-if get_option('tests') and have_x11_client
+if get_option('tests') and have_xwayland
   subdir('tests')
 endif
 
@@ -335,8 +333,7 @@ meson.add_dist_script('build-aux/generate-stylesheets.py')
 meson.add_dist_script('build-aux/check-version.py', meson.project_version(), 'NEWS')
 
 summary_options = {
-  'x11': have_x11,
-  'x11_client': have_x11_client,
+  'have_xwayland': have_xwayland,
   'camera_monitor': get_option('camera_monitor'),
   'networkmanager': get_option('networkmanager'),
   'systemd': get_option('systemd'),

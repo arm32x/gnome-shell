@@ -1,11 +1,11 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import IBus from 'gi://IBus';
-import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
 import * as Signals from './signals.js';
 import * as BoxPointer from '../ui/boxpointer.js';
+import {logErrorUnlessCancelled} from './errorUtils.js';
 
 import * as IBusCandidatePopup from '../ui/ibusCandidatePopup.js';
 
@@ -26,6 +26,8 @@ let _ibusManager = null;
 const IBUS_SYSTEMD_SERVICE = 'org.freedesktop.IBus.session.GNOME.service';
 
 const TYPING_BOOSTER_ENGINE = 'typing-booster';
+
+const FALLBACK_ENGINE_ID = 'xkb:us::eng';
 
 function _checkIBusVersion(requiredMajor, requiredMinor, requiredMicro) {
     if ((IBus.MAJOR_VERSION > requiredMajor) ||
@@ -97,7 +99,7 @@ class IBusManager extends Signals.EventEmitter {
     async _queueSpawn() {
         const isSystemdService = await this._ibusSystemdServiceExists();
         if (!isSystemdService)
-            this._spawn(Meta.is_wayland_compositor() ? [] : ['--xim']);
+            this._spawn([]);
     }
 
     _tryAppendEnv(env, varname) {
@@ -167,16 +169,13 @@ class IBusManager extends Signals.EventEmitter {
             const enginesList =
                 await this._ibus.list_engines_async(-1, this._cancellable);
             for (let i = 0; i < enginesList.length; ++i) {
-                let name = enginesList[i].get_name();
+                const name = enginesList[i].get_name();
                 this._engines.set(name, enginesList[i]);
             }
             this._updateReadiness();
         } catch (e) {
-            if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
-                return;
-
-            logError(e);
-            this._clear();
+            if (logErrorUnlessCancelled(e))
+                this._clear();
         }
     }
 
@@ -185,10 +184,8 @@ class IBusManager extends Signals.EventEmitter {
             await this._ibus.request_name_async(IBus.SERVICE_PANEL,
                 IBus.BusNameFlag.REPLACE_EXISTING, -1, this._cancellable);
         } catch (e) {
-            if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED)) {
-                logError(e);
+            if (logErrorUnlessCancelled(e))
                 this._clear();
-            }
             return;
         }
 
@@ -199,7 +196,7 @@ class IBusManager extends Signals.EventEmitter {
         this._candidatePopup.setPanelService(this._panelService);
         this._panelService.connect('update-property', this._updateProperty.bind(this));
         this._panelService.connect('set-cursor-location', (ps, x, y, w, h) => {
-            let cursorLocation = {x, y, width: w, height: h};
+            const cursorLocation = {x, y, width: w, height: h};
             this.emit('set-cursor-location', cursorLocation);
         });
         this._panelService.connect('focus-in', (panel, path) => {
@@ -287,8 +284,16 @@ class IBusManager extends Signals.EventEmitter {
                 this._MAX_INPUT_SOURCE_ACTIVATION_TIME,
                 this._cancellable);
         } catch (e) {
-            if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
-                logError(e);
+            if (!logErrorUnlessCancelled(e))
+                return;
+
+            try {
+                await this._ibus.set_global_engine_async(FALLBACK_ENGINE_ID,
+                    this._MAX_INPUT_SOURCE_ACTIVATION_TIME,
+                    this._cancellable);
+            } catch (e2) {
+                logErrorUnlessCancelled(e2);
+            }
         }
     }
 
@@ -324,7 +329,7 @@ class IBusManager extends Signals.EventEmitter {
         }
 
         this._preloadEnginesId =
-            GLib.timeout_add_seconds(
+            GLib.timeout_add_seconds_once(
                 GLib.PRIORITY_DEFAULT,
                 this._PRELOAD_ENGINES_DELAY_TIME,
                 () => {
@@ -334,7 +339,6 @@ class IBusManager extends Signals.EventEmitter {
                         this._cancellable,
                         null);
                     this._preloadEnginesId = 0;
-                    return GLib.SOURCE_REMOVE;
                 });
     }
 

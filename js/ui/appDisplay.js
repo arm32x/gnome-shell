@@ -1,3 +1,4 @@
+import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 import GLib from 'gi://GLib';
@@ -77,14 +78,14 @@ const DEFAULT_FOLDERS = {
 };
 
 function _getCategories(info) {
-    let categoriesStr = info.get_categories();
+    const categoriesStr = info.get_categories();
     if (!categoriesStr)
         return [];
     return categoriesStr.split(';');
 }
 
 function _listsIntersect(a, b) {
-    for (let itemA of a) {
+    for (const itemA of a) {
         if (b.includes(itemA))
             return true;
     }
@@ -92,10 +93,10 @@ function _listsIntersect(a, b) {
 }
 
 function _getFolderName(folder) {
-    let name = folder.get_string('name');
+    const name = folder.get_string('name');
 
     if (folder.get_boolean('translate')) {
-        let translated = Shell.util_get_translated_folder_name(name);
+        const translated = Shell.util_get_translated_folder_name(name);
         if (translated !== null)
             return translated;
     }
@@ -112,13 +113,13 @@ function _getViewFromIcon(icon) {
 }
 
 function _findBestFolderName(apps) {
-    let appInfos = apps.map(app => app.get_app_info());
+    const appInfos = apps.map(app => app.get_app_info());
 
-    let categoryCounter = {};
-    let commonCategories = [];
+    const categoryCounter = {};
+    const commonCategories = [];
 
     appInfos.reduce((categories, appInfo) => {
-        for (let category of _getCategories(appInfo)) {
+        for (const category of _getCategories(appInfo)) {
             if (!(category in categoryCounter))
                 categoryCounter[category] = 0;
 
@@ -133,7 +134,7 @@ function _findBestFolderName(apps) {
         return categories;
     }, commonCategories);
 
-    for (let category of commonCategories) {
+    for (const category of commonCategories) {
         const directory = `${category}.directory`;
         const translated = Shell.util_get_translated_folder_name(directory);
         if (translated !== null)
@@ -691,11 +692,10 @@ var BaseAppView = GObject.registerClass({
         this.goToPage(nextPage);
 
         this._canScroll = false;
-        this._scrollTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+        this._scrollTimeoutId = GLib.timeout_add_once(GLib.PRIORITY_DEFAULT,
             SCROLL_TIMEOUT_TIME, () => {
                 this._canScroll = true;
                 this._scrollTimeoutId = 0;
-                return GLib.SOURCE_REMOVE;
             });
 
         return Clutter.EVENT_STOP;
@@ -797,12 +797,11 @@ var BaseAppView = GObject.registerClass({
                 position,
                 source,
                 destroyId: source.connect('destroy', () => this._removeDelayedMove()),
-                timeoutId: GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+                timeoutId: GLib.timeout_add_once(GLib.PRIORITY_DEFAULT,
                     DELAYED_MOVE_TIMEOUT, () => {
                         this._moveItem(source, page, position);
                         this._delayedMoveData.timeoutId = 0;
                         this._removeDelayedMove();
-                        return GLib.SOURCE_REMOVE;
                     }),
             };
         }
@@ -909,14 +908,13 @@ var BaseAppView = GObject.registerClass({
         const {targetActor} = dragEvent;
 
         this._dragPageSwitchInitialTimeoutId =
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, DRAG_PAGE_SWITCH_INITIAL_TIMEOUT, () => {
+            GLib.timeout_add_once(GLib.PRIORITY_DEFAULT, DRAG_PAGE_SWITCH_INITIAL_TIMEOUT, () => {
                 const direction = targetActor === this._prevPageIndicator ? -1 : 1;
 
                 this.goToPage(this._grid.currentPage + direction);
                 this._setupDragPageSwitchRepeat(direction);
 
                 delete this._dragPageSwitchInitialTimeoutId;
-                return GLib.SOURCE_REMOVE;
             });
     }
 
@@ -1079,14 +1077,14 @@ var BaseAppView = GObject.registerClass({
     }
 
     _redisplay() {
-        let oldApps = this._orderedItems.slice();
-        let oldAppIds = oldApps.map(icon => icon.id);
+        const oldApps = this._orderedItems.slice();
+        const oldAppIds = oldApps.map(icon => icon.id);
 
-        let newApps = this._loadApps().sort(this._compareItems.bind(this));
-        let newAppIds = newApps.map(icon => icon.id);
+        const newApps = this._loadApps().sort(this._compareItems.bind(this));
+        const newAppIds = newApps.map(icon => icon.id);
 
-        let addedApps = newApps.filter(icon => !oldAppIds.includes(icon.id));
-        let removedApps = oldApps.filter(icon => !newAppIds.includes(icon.id));
+        const addedApps = newApps.filter(icon => !oldAppIds.includes(icon.id));
+        const removedApps = oldApps.filter(icon => !newAppIds.includes(icon.id));
 
         // Remove old app icons
         removedApps.forEach(icon => {
@@ -1131,13 +1129,13 @@ var BaseAppView = GObject.registerClass({
 
     selectApp(id) {
         if (this._items.has(id)) {
-            let item = this._items.get(id);
+            const item = this._items.get(id);
 
             if (item.mapped) {
                 this._selectAppInternal(id);
             } else {
                 // Need to wait until the view is mapped
-                let signalId = item.connect('notify::mapped', actor => {
+                const signalId = item.connect('notify::mapped', actor => {
                     if (actor.mapped) {
                         actor.disconnect(signalId);
                         this._selectAppInternal(id);
@@ -1146,7 +1144,7 @@ var BaseAppView = GObject.registerClass({
             }
         } else {
             // Need to wait until the view is built
-            let signalId = this.connect('view-loaded', () => {
+            const signalId = this.connect('view-loaded', () => {
                 this.disconnect(signalId);
                 this.selectApp(id);
             });
@@ -1224,7 +1222,7 @@ var BaseAppView = GObject.registerClass({
         this.remove_all_transitions();
         this._grid.remove_all_transitions();
 
-        let params = {
+        const params = {
             duration: VIEWS_SWITCH_TIME,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         };
@@ -1403,7 +1401,8 @@ class AppDisplay extends BaseAppView {
     }
 
     _ensureDefaultFolders() {
-        if (this._folderSettings.get_strv('folder-children').length > 0)
+        if (this._folderSettings.get_user_value('folder-children') !== null ||
+            this._folderSettings.get_strv('folder-children').length > 0)
             return;
 
         const appSys = Shell.AppSystem.get_default();
@@ -1488,7 +1487,7 @@ class AppDisplay extends BaseAppView {
     }
 
     _loadApps() {
-        let appIcons = [];
+        const appIcons = [];
         this._appInfoList = Shell.AppSystem.get_default().get_installed().filter(appInfo => {
             try {
                 appInfo.get_id(); // catch invalid file encodings
@@ -1499,16 +1498,16 @@ class AppDisplay extends BaseAppView {
                 this._parentalControlsManager.shouldShowApp(appInfo);
         });
 
-        let apps = this._appInfoList.map(app => app.get_id());
+        const apps = this._appInfoList.map(app => app.get_id());
 
-        let appSys = Shell.AppSystem.get_default();
+        const appSys = Shell.AppSystem.get_default();
 
         const appsInsideFolders = new Set();
         this._folderIcons = [];
 
-        let folders = this._folderSettings.get_strv('folder-children');
+        const folders = this._folderSettings.get_strv('folder-children');
         folders.forEach(id => {
-            let path = `${this._folderSettings.path}folders/${id}/`;
+            const path = `${this._folderSettings.path}folders/${id}/`;
             let icon = this._items.get(id);
             if (!icon) {
                 icon = new FolderIcon(id, path, this);
@@ -1546,7 +1545,7 @@ class AppDisplay extends BaseAppView {
 
             let icon = this._items.get(appId);
             if (!icon) {
-                let app = appSys.lookup_app(appId);
+                const app = appSys.lookup_app(appId);
 
                 icon = new AppIcon(app, {isDraggable});
             }
@@ -1681,7 +1680,7 @@ class AppDisplay extends BaseAppView {
 
         this._savePages();
 
-        let view = _getViewFromIcon(source);
+        const view = _getViewFromIcon(source);
         if (view instanceof FolderView)
             view.removeApp(source.app);
 
@@ -1695,14 +1694,14 @@ class AppDisplay extends BaseAppView {
     }
 
     createFolder(apps) {
-        let newFolderId = GLib.uuid_string_random();
+        const newFolderId = GLib.uuid_string_random();
 
-        let folders = this._folderSettings.get_strv('folder-children');
+        const folders = this._folderSettings.get_strv('folder-children');
         folders.push(newFolderId);
         this._folderSettings.set_strv('folder-children', folders);
 
         // Create the new folder
-        let newFolderPath = this._folderSettings.path.concat('folders/', newFolderId, '/');
+        const newFolderPath = this._folderSettings.path.concat('folders/', newFolderId, '/');
         let newFolderSettings;
         try {
             newFolderSettings = new Gio.Settings({
@@ -1728,7 +1727,7 @@ class AppDisplay extends BaseAppView {
             return counter;
         }, 0);
 
-        let appItems = apps.map(id => this._items.get(id).app);
+        const appItems = apps.map(id => this._items.get(id).app);
         let folderName = _findBestFolderName(appItems);
         if (!folderName)
             folderName = _('Unnamed Folder');
@@ -1764,10 +1763,10 @@ export class AppSearchProvider {
 
     getResultMetas(apps) {
         const {scaleFactor} = St.ThemeContext.get_for_stage(global.stage);
-        let metas = [];
-        for (let id of apps) {
+        const metas = [];
+        for (const id of apps) {
             if (id.endsWith('.desktop')) {
-                let app = this._appSys.lookup_app(id);
+                const app = this._appSys.lookup_app(id);
 
                 metas.push({
                     id: app.get_id(),
@@ -1775,8 +1774,8 @@ export class AppSearchProvider {
                     createIcon: size => app.create_icon_texture(size),
                 });
             } else {
-                let name = this._systemActions.getName(id);
-                let iconName = this._systemActions.getIconName(id);
+                const name = this._systemActions.getName(id);
+                const iconName = this._systemActions.getIconName(id);
 
                 const createIcon = size => new St.Icon({
                     icon_name: iconName,
@@ -1801,7 +1800,7 @@ export class AppSearchProvider {
         // results can be filtered correctly.
         if (!this._parentalControlsManager.initialized) {
             return new Promise(resolve => {
-                let initializedId = this._parentalControlsManager.connect('app-filter-changed', async () => {
+                const initializedId = this._parentalControlsManager.connect('app-filter-changed', async () => {
                     if (this._parentalControlsManager.initialized) {
                         this._parentalControlsManager.disconnect(initializedId);
                         resolve(await this.getInitialResultSet(terms, cancellable));
@@ -1810,9 +1809,9 @@ export class AppSearchProvider {
             });
         }
 
-        let query = terms.join(' ');
-        let groups = Shell.AppSystem.search(query);
-        let usage = Shell.AppUsage.get_default();
+        const query = terms.join(' ');
+        const groups = Shell.AppSystem.search(query);
+        const usage = Shell.AppUsage.get_default();
         let results = [];
 
         groups.forEach(group => {
@@ -2132,19 +2131,19 @@ class FolderView extends BaseAppView {
             row_homogeneous: true,
             column_homogeneous: true,
         });
-        let icon = new St.Widget({
+        const icon = new St.Widget({
             layout_manager: layout,
             x_align: Clutter.ActorAlign.CENTER,
             style: `width: ${size}px; height: ${size}px;`,
         });
 
-        let subSize = Math.floor(FOLDER_SUBICON_FRACTION * size);
+        const subSize = Math.floor(FOLDER_SUBICON_FRACTION * size);
 
-        let numItems = this._orderedItems.length;
-        let rtl = icon.get_text_direction() === Clutter.TextDirection.RTL;
+        const numItems = this._orderedItems.length;
+        const rtl = icon.get_text_direction() === Clutter.TextDirection.RTL;
         for (let i = 0; i < 4; i++) {
             const style = `width: ${subSize}px; height: ${subSize}px;`;
-            let bin = new St.Bin({style});
+            const bin = new St.Bin({style});
             if (i < numItems)
                 bin.child = this._orderedItems[i].app.create_icon_texture(subSize);
             layout.attach(bin, rtl ? (i + 1) % 2 : i % 2, Math.floor(i / 2), 1, 1);
@@ -2183,14 +2182,14 @@ class FolderView extends BaseAppView {
         const folderCategories = this._folder.get_strv('categories');
         const appInfos = this._parentView.getAppInfos();
         appInfos.forEach(appInfo => {
-            let appCategories = _getCategories(appInfo);
+            const appCategories = _getCategories(appInfo);
             if (!_listsIntersect(folderCategories, appCategories))
                 return;
 
             addAppId(appInfo.get_id());
         });
 
-        let items = [];
+        const items = [];
         this._apps.forEach(app => {
             let icon = this._items.get(app.get_id());
             if (!icon)
@@ -2213,15 +2212,15 @@ class FolderView extends BaseAppView {
     }
 
     addApp(app) {
-        let folderApps = this._folder.get_strv('apps');
+        const folderApps = this._folder.get_strv('apps');
         folderApps.push(app.id);
 
         this._folder.set_strv('apps', folderApps);
 
         // Also remove from 'excluded-apps' if the app id is listed
         // there. This is only possible on categories-based folders.
-        let excludedApps = this._folder.get_strv('excluded-apps');
-        let index = excludedApps.indexOf(app.id);
+        const excludedApps = this._folder.get_strv('excluded-apps');
+        const index = excludedApps.indexOf(app.id);
         if (index >= 0) {
             excludedApps.splice(index, 1);
             this._folder.set_strv('excluded-apps', excludedApps);
@@ -2229,8 +2228,8 @@ class FolderView extends BaseAppView {
     }
 
     removeApp(app) {
-        let folderApps = this._folder.get_strv('apps');
-        let index = folderApps.indexOf(app.id);
+        const folderApps = this._folder.get_strv('apps');
+        const index = folderApps.indexOf(app.id);
         if (index >= 0)
             folderApps.splice(index, 1);
 
@@ -2240,12 +2239,12 @@ class FolderView extends BaseAppView {
             this._deletingFolder = true;
 
             // Resetting all keys deletes the relocatable schema
-            let keys = this._folder.settings_schema.list_keys();
+            const keys = this._folder.settings_schema.list_keys();
             for (const key of keys)
                 this._folder.reset(key);
 
-            let settings = new Gio.Settings({schema_id: 'org.gnome.desktop.app-folders'});
-            let folders = settings.get_strv('folder-children');
+            const settings = new Gio.Settings({schema_id: 'org.gnome.desktop.app-folders'});
+            const folders = settings.get_strv('folder-children');
             folders.splice(folders.indexOf(this._id), 1);
             settings.set_strv('folder-children', folders);
 
@@ -2278,9 +2277,11 @@ export const FolderIcon = GObject.registerClass({
         super._init({
             style_class: 'overview-tile app-folder',
             button_mask: St.ButtonMask.ONE,
-            toggle_mode: true,
             can_focus: true,
         }, global.settings.is_writable('app-picker-layout'));
+
+        this.add_accessible_state(Atk.StateType.EXPANDABLE);
+
         this._id = id;
         this._name = '';
         this._parentView = parentView;
@@ -2300,6 +2301,9 @@ export const FolderIcon = GObject.registerClass({
         this.view = new FolderView(this._folder, id, parentView);
 
         this._folder.connectObject(
+            'changed', this._sync.bind(this), this);
+        const appFavorites = AppFavorites.getAppFavorites();
+        appFavorites.connectObject(
             'changed', this._sync.bind(this), this);
         this._sync();
     }
@@ -2374,7 +2378,7 @@ export const FolderIcon = GObject.registerClass({
         if (!(source instanceof AppIcon))
             return false;
 
-        let view = _getViewFromIcon(source);
+        const view = _getViewFromIcon(source);
         if (!view || !(view instanceof AppDisplay))
             return false;
 
@@ -2396,7 +2400,7 @@ export const FolderIcon = GObject.registerClass({
     }
 
     _updateName() {
-        let name = _getFolderName(this._folder);
+        const name = _getFolderName(this._folder);
         if (this.name === name)
             return;
 
@@ -2438,8 +2442,10 @@ export const FolderIcon = GObject.registerClass({
                     delay: isOpen ? 0 : FOLDER_DIALOG_ANIMATION_TIME - duration,
                 });
 
-                if (!isOpen)
-                    this.checked = false;
+                if (isOpen)
+                    this.add_accessible_state(Atk.StateType.EXPANDED);
+                else
+                    this.remove_accessible_state(Atk.StateType.EXPANDED);
             });
         }
     }
@@ -2456,6 +2462,8 @@ export const AppFolderDialog = GObject.registerClass({
             x_expand: true,
             y_expand: true,
             reactive: true,
+            accessible_name: source.name,
+            accessible_role: Atk.Role.PANEL,
         });
 
         this.add_constraint(new Layout.MonitorConstraint({primary: true}));
@@ -2518,10 +2526,10 @@ export const AppFolderDialog = GObject.registerClass({
         this._viewBox.add_child(this._entryBox);
 
         // Empty actor to center the title
-        let ghostButton = new Clutter.Actor();
+        const ghostButton = new Clutter.Actor();
         this._entryBox.add_child(ghostButton);
 
-        let stack = new Shell.Stack({
+        const stack = new Shell.Stack({
             x_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
         });
@@ -2586,20 +2594,21 @@ export const AppFolderDialog = GObject.registerClass({
     }
 
     _syncFolderName() {
-        let newName = _getFolderName(this._folder);
+        const newName = _getFolderName(this._folder);
 
         this._folderNameLabel.text = newName;
         this._entry.text = newName;
     }
 
     _switchActor(from, to) {
-        to.reactive = true;
+        to.reactive = to.can_focus = true;
         to.ease({
             opacity: 255,
             duration: 300,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
 
+        from.can_focus = false;
         from.ease({
             opacity: 0,
             duration: 300,
@@ -2627,8 +2636,8 @@ export const AppFolderDialog = GObject.registerClass({
     }
 
     _maybeUpdateFolderName() {
-        let folderName = _getFolderName(this._folder);
-        let newFolderName = this._entry.text.trim();
+        const folderName = _getFolderName(this._folder);
+        const newFolderName = this._entry.text.trim();
 
         if (newFolderName.length === 0 || newFolderName === folderName)
             return;
@@ -2638,9 +2647,9 @@ export const AppFolderDialog = GObject.registerClass({
     }
 
     _zoomAndFadeIn() {
-        let [sourceX, sourceY] =
+        const [sourceX, sourceY] =
             this._source.get_transformed_position();
-        let [dialogX, dialogY] =
+        const [dialogX, dialogY] =
             this.child.get_transformed_position();
 
         this.child.set({
@@ -2683,9 +2692,9 @@ export const AppFolderDialog = GObject.registerClass({
             return;
         }
 
-        let [sourceX, sourceY] =
+        const [sourceX, sourceY] =
             this._source.get_transformed_position();
-        let [dialogX, dialogY] =
+        const [dialogX, dialogY] =
             this.child.get_transformed_position();
 
         this.ease({
@@ -2815,10 +2824,9 @@ export const AppFolderDialog = GObject.registerClass({
             return;
 
         this._popdownTimeoutId =
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, POPDOWN_DIALOG_TIMEOUT, () => {
+            GLib.timeout_add_once(GLib.PRIORITY_DEFAULT, POPDOWN_DIALOG_TIMEOUT, () => {
                 this._popdownTimeoutId = 0;
                 this.popdown();
-                return GLib.SOURCE_REMOVE;
             });
     }
 
@@ -3028,7 +3036,6 @@ export const AppIcon = GObject.registerClass({
         this.emit('menu-state-changed', true);
 
         this._menu.open(BoxPointer.PopupAnimation.FULL);
-        this._menuManager.ignoreRelease();
         this.emit('sync-tooltip');
 
         return false;
@@ -3040,11 +3047,11 @@ export const AppIcon = GObject.registerClass({
     }
 
     activate(button) {
-        let event = Clutter.get_current_event();
-        let modifiers = event ? event.get_state() : 0;
-        let isMiddleButton = button && button === Clutter.BUTTON_MIDDLE;
-        let isCtrlPressed = (modifiers & Clutter.ModifierType.CONTROL_MASK) !== 0;
-        let openNewWindow = this.app.can_open_new_window() &&
+        const event = Clutter.get_current_event();
+        const modifiers = event ? event.get_state() : 0;
+        const isMiddleButton = button && button === Clutter.BUTTON_MIDDLE;
+        const isCtrlPressed = (modifiers & Clutter.ModifierType.CONTROL_MASK) !== 0;
+        const openNewWindow = this.app.can_open_new_window() &&
                             this.app.state === Shell.AppState.RUNNING &&
                             (isCtrlPressed || isMiddleButton);
 
@@ -3098,7 +3105,7 @@ export const AppIcon = GObject.registerClass({
     }
 
     _canAccept(source) {
-        let view = _getViewFromIcon(source);
+        const view = _getViewFromIcon(source);
 
         return source !== this &&
                (source instanceof this.constructor) &&
@@ -3116,11 +3123,10 @@ export const AppIcon = GObject.registerClass({
                 return;
 
             this._folderPreviewId =
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                GLib.timeout_add_once(GLib.PRIORITY_DEFAULT, 500, () => {
                     this.add_style_pseudo_class('drop');
                     this._showFolderPreview();
                     this._folderPreviewId = 0;
-                    return GLib.SOURCE_REMOVE;
                 });
         } else {
             if (this._folderPreviewId > 0) {
@@ -3137,8 +3143,8 @@ export const AppIcon = GObject.registerClass({
         if (!accepted)
             return false;
 
-        let view = _getViewFromIcon(this);
-        let apps = [this.id, source.id];
+        const view = _getViewFromIcon(this);
+        const apps = [this.id, source.id];
 
         return view?.createFolder(apps);
     }

@@ -8,7 +8,6 @@ import St from 'gi://St';
 
 import * as AppDisplay from './appDisplay.js';
 import * as Dash from './dash.js';
-import * as Layout from './layout.js';
 import * as Main from './main.js';
 import * as Overview from './overview.js';
 import * as SearchController from './searchController.js';
@@ -16,6 +15,8 @@ import * as Util from '../misc/util.js';
 import * as WindowManager from './windowManager.js';
 import * as WorkspaceThumbnail from './workspaceThumbnail.js';
 import * as WorkspacesView from './workspacesView.js';
+
+import {STARTUP_ANIMATION_TIME} from './layout.js';
 
 export const SMALL_WORKSPACE_RATIO = 0.15;
 const DASH_MAX_HEIGHT_RATIO = 0.16;
@@ -51,7 +52,8 @@ class ControlsManagerLayout extends Clutter.LayoutManager {
         this._cachedWorkspaceBoxes = new Map();
         this._postAllocationCallbacks = [];
 
-        stateAdjustment.connect('notify::value', () => this.layout_changed());
+        stateAdjustment.connectObject('notify::value',
+            () => this.layout_changed(), this);
 
         this._workAreaBox = new Clutter.ActorBox();
         global.display.connectObject(
@@ -160,7 +162,7 @@ class ControlsManagerLayout extends Clutter.LayoutManager {
         let availableHeight = height;
 
         // Search entry
-        let [searchHeight] = this._searchEntry.get_preferred_height(width);
+        const [searchHeight] = this._searchEntry.get_preferred_height(width);
         childBox.set_origin(0, startY);
         childBox.set_size(width, searchHeight);
         this._searchEntry.allocate(childBox);
@@ -340,19 +342,20 @@ class ControlsManager extends St.Widget {
         this._workspaceAdjustment = Main.createWorkspacesAdjustment(this);
 
         this._stateAdjustment = new OverviewAdjustment(this);
-        this._stateAdjustment.connect('notify::value', this._update.bind(this));
+        this._stateAdjustment.connectObject('notify::value',
+            () => this._update(), this);
 
         this._searchController = new SearchController.SearchController(
             this._searchEntry,
             this.dash.showAppsButton);
-        this._searchController.connect('notify::search-active', this._onSearchChanged.bind(this));
+        this._searchController.connectObject('notify::search-active',
+            () => this._onSearchChanged(), this);
 
-        Main.layoutManager.connect('monitors-changed', () => {
-            this._thumbnailsBox.setMonitorIndex(Main.layoutManager.primaryIndex);
-        });
+        Main.layoutManager.connectObject('monitors-changed', () =>
+            this._thumbnailsBox.setMonitorIndex(Main.layoutManager.primaryIndex), this);
         this._thumbnailsBox = new WorkspaceThumbnail.ThumbnailsBox(
             this._workspaceAdjustment, Main.layoutManager.primaryIndex);
-        this._thumbnailsBox.connect('notify::should-show', () => {
+        this._thumbnailsBox.connectObject('notify::should-show', () => {
             this._thumbnailsBox.show();
             this._thumbnailsBox.ease_property('expand-fraction',
                 this._thumbnailsBox.should_show ? 1 : 0, {
@@ -360,7 +363,7 @@ class ControlsManager extends St.Widget {
                     mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                     onComplete: () => this._updateThumbnailsBox(),
                 });
-        });
+        }, this);
 
         this._workspacesDisplay = new WorkspacesView.WorkspacesDisplay(
             this,
@@ -384,8 +387,8 @@ class ControlsManager extends St.Widget {
             this.dash,
             this._stateAdjustment);
 
-        this.dash.showAppsButton.connect('notify::checked',
-            this._onShowAppsButtonToggled.bind(this));
+        this.dash.showAppsButton.connectObject('notify::checked',
+            () => this._onShowAppsButtonToggled(), this);
 
         Main.ctrlAltTabManager.addGroup(
             this.appDisplay,
@@ -414,7 +417,7 @@ class ControlsManager extends St.Widget {
         this._a11ySettings = new Gio.Settings({schema_id: A11Y_SCHEMA});
 
         this._lastOverlayKeyTime = 0;
-        global.display.connect('overlay-key', () => {
+        global.display.connectObject('overlay-key', () => {
             if (this._a11ySettings.get_boolean('stickykeys-enable'))
                 return;
 
@@ -433,7 +436,7 @@ class ControlsManager extends St.Widget {
                 this._shiftState(Meta.MotionDirection.UP);
             else
                 Main.overview.toggle();
-        });
+        }, this);
 
         // connect_after to give search controller first dibs on the event
         global.stage.connect_after('key-press-event', (actor, event) => {
@@ -553,6 +556,7 @@ class ControlsManager extends St.Widget {
         if (thumbnailsBoxVisible) {
             this._thumbnailsBox.opacity = 0;
             this._thumbnailsBox.visible = thumbnailsBoxVisible;
+            this._thumbnailsBox.expandFraction = 1.0;
         }
 
         const params = {
@@ -560,10 +564,9 @@ class ControlsManager extends St.Widget {
             duration: animate ? SIDE_CONTROLS_ANIMATION_TIME : 0,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             onComplete: () => {
-                this._thumbnailsBox.set({
-                    visible: thumbnailsBoxVisible,
-                    expandFraction: thumbnailsBoxVisible ? 1.0 : 0.0,
-                });
+                this._thumbnailsBox.visible = thumbnailsBoxVisible;
+                if (!thumbnailsBoxVisible)
+                    this._thumbnailsBox.expandFraction = 0.0;
             },
         };
 
@@ -650,7 +653,7 @@ class ControlsManager extends St.Widget {
         this._stateAdjustment.remove_transition('value');
         this._stateAdjustment.ease(value, {
             duration: SIDE_CONTROLS_ANIMATION_TIME,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            mode: Clutter.AnimationMode.EASE_OUT_SINE,
         });
     }
 
@@ -721,7 +724,7 @@ class ControlsManager extends St.Widget {
         this._stateAdjustment.value = ControlsState.HIDDEN;
         this._stateAdjustment.ease(state, {
             duration: Overview.ANIMATION_TIME,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            mode: Clutter.AnimationMode.EASE_OUT_SINE,
             onStopped: () => {
                 if (callback)
                     callback();
@@ -800,11 +803,14 @@ class ControlsManager extends St.Widget {
 
         this.prepareToEnterOverview();
 
+        const startupPromises = [];
+
         this._stateAdjustment.value = ControlsState.HIDDEN;
-        this._stateAdjustment.ease(ControlsState.WINDOW_PICKER, {
-            duration: Overview.ANIMATION_TIME,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
+        startupPromises.push(
+            this._stateAdjustment.easeAsync(ControlsState.WINDOW_PICKER, {
+                duration: Overview.ANIMATION_TIME,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            }));
 
         this.dash.showAppsButton.checked = false;
         this._ignoreShowAppsButtonToggle = false;
@@ -815,14 +821,13 @@ class ControlsManager extends St.Widget {
         // We can't run the animation before the first allocation happens
         await this.layout_manager.ensureAllocation();
 
-        const {STARTUP_ANIMATION_TIME} = Layout;
-
         // Opacity
-        this.ease({
-            opacity: 255,
-            duration: STARTUP_ANIMATION_TIME,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
+        startupPromises.push(
+            this.easeAsync({
+                opacity: 255,
+                duration: STARTUP_ANIMATION_TIME,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            }));
 
         // Search bar falls from the ceiling
         const {primaryMonitor} = Main.layoutManager;
@@ -830,24 +835,25 @@ class ControlsManager extends St.Widget {
         const yOffset = y - primaryMonitor.y;
 
         this._searchEntryBin.translation_y = -(yOffset + this._searchEntryBin.height);
-        this._searchEntryBin.ease({
-            translation_y: 0,
-            duration: STARTUP_ANIMATION_TIME,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
+        startupPromises.push(
+            this._searchEntryBin.easeAsync({
+                translation_y: 0,
+                duration: STARTUP_ANIMATION_TIME,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            }));
 
         // The Dash rises from the bottom. This is the last animation to finish,
         // so resolve the promise there.
         this.dash.translation_y = this.dash.height + this.dash.margin_bottom;
-        return new Promise(resolve => {
-            this.dash.ease({
+        startupPromises.push(
+            this.dash.easeAsync({
                 translation_y: 0,
                 delay: STARTUP_ANIMATION_TIME,
                 duration: STARTUP_ANIMATION_TIME,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                onStopped: () => resolve(),
-            });
-        });
+            }));
+
+        return Promise.allSettled(startupPromises);
     }
 
     get searchController() {

@@ -42,14 +42,14 @@ class ATIndicator extends PanelMenu.Button {
         this._a11ySettings = new Gio.Settings({schema_id: A11Y_SCHEMA});
         this._a11ySettings.connect(`changed::${KEY_ALWAYS_SHOW}`, this._queueSyncMenuVisibility.bind(this));
 
-        let highContrast = this._buildItem(_('High Contrast'), A11Y_INTERFACE_SCHEMA, KEY_HIGH_CONTRAST);
+        const highContrast = this._buildItem(_('High Contrast'), A11Y_INTERFACE_SCHEMA, KEY_HIGH_CONTRAST);
         this.menu.addMenuItem(highContrast);
 
         const magnifier = this._buildItem(_('Zoom'),
             APPLICATIONS_SCHEMA, 'screen-magnifier-enabled');
         this.menu.addMenuItem(magnifier);
 
-        let textZoom = this._buildFontItem();
+        const textZoom = this._buildFontItem();
         this.menu.addMenuItem(textZoom);
 
         const screenReader = this._buildItem(_('Screen Reader'),
@@ -90,19 +90,17 @@ class ATIndicator extends PanelMenu.Button {
     _syncMenuVisibility() {
         this._syncMenuVisibilityIdle = 0;
 
-        let alwaysShow = this._a11ySettings.get_boolean(KEY_ALWAYS_SHOW);
-        let items = this.menu._getMenuItems();
+        const alwaysShow = this._a11ySettings.get_boolean(KEY_ALWAYS_SHOW);
+        const items = this.menu._getMenuItems();
 
         this.visible = alwaysShow || items.some(f => !!f.state);
-
-        return GLib.SOURCE_REMOVE;
     }
 
     _queueSyncMenuVisibility() {
         if (this._syncMenuVisibilityIdle)
             return;
 
-        this._syncMenuVisibilityIdle = GLib.idle_add(GLib.PRIORITY_DEFAULT, this._syncMenuVisibility.bind(this));
+        this._syncMenuVisibilityIdle = GLib.idle_add_once(GLib.PRIORITY_DEFAULT, this._syncMenuVisibility.bind(this));
         GLib.Source.set_name_by_id(this._syncMenuVisibilityIdle, '[gnome-shell] this._syncMenuVisibility');
     }
 
@@ -132,7 +130,7 @@ class ATIndicator extends PanelMenu.Button {
 
         settings.connect(`changed::${KEY_TEXT_SCALING_FACTOR}`, () => {
             factor = settings.get_double(KEY_TEXT_SCALING_FACTOR);
-            let active = factor > 1.0;
+            const active = factor > 1.0;
 
             widget.block_signal_handler(toggledId);
             widget.setToggleState(active);
@@ -269,7 +267,7 @@ class StickyKeysToggle extends QuickToggle {
     constructor() {
         super({
             title: _('Sticky Keys'),
-            iconName: 'accessibility-keyboard-keys-symbolic',
+            iconName: 'accessibility-sticky-keys-symbolic',
             toggleMode: true,
         });
 
@@ -285,7 +283,7 @@ class SlowKeysToggle extends QuickToggle {
     constructor() {
         super({
             title: _('Slow Keys'),
-            iconName: 'accessibility-keyboard-keys-symbolic',
+            iconName: 'accessibility-slow-keys-symbolic',
             toggleMode: true,
         });
 
@@ -301,7 +299,7 @@ class BounceKeysToggle extends QuickToggle {
     constructor() {
         super({
             title: _('Bounce Keys'),
-            iconName: 'accessibility-keyboard-keys-symbolic',
+            iconName: 'accessibility-bounce-keys-symbolic',
             toggleMode: true,
         });
 

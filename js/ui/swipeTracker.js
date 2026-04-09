@@ -103,7 +103,7 @@ const TouchpadSwipeGesture = GObject.registerClass({
         'end':    {param_types: [GObject.TYPE_UINT, GObject.TYPE_DOUBLE]},
     },
 }, class TouchpadSwipeGesture extends GObject.Object {
-    _init(allowedModes) {
+    _init(actor, allowedModes) {
         super._init();
         this._allowedModes = allowedModes;
         this._state = TouchpadState.NONE;
@@ -113,8 +113,8 @@ const TouchpadSwipeGesture = GObject.registerClass({
             schema_id: 'org.gnome.desktop.peripherals.touchpad',
         });
 
-        global.stage.connectObject(
-            'captured-event::touchpad', this._handleEvent.bind(this), this);
+        actor.connectObject(
+            'event::touchpad', this._handleEvent.bind(this), this);
     }
 
     _handleEvent(actor, event) {
@@ -136,7 +136,7 @@ const TouchpadSwipeGesture = GObject.registerClass({
         if (this._state === TouchpadState.IGNORED)
             return Clutter.EVENT_PROPAGATE;
 
-        let time = event.get_time();
+        const time = event.get_time();
 
         const [x, y] = event.get_coords();
         const [dx, dy] = event.get_gesture_motion_delta_unaccelerated();
@@ -283,8 +283,8 @@ const ScrollGesture = GObject.registerClass({
         const vertical = this.orientation === Clutter.Orientation.VERTICAL;
         const distance = vertical ? TOUCHPAD_BASE_HEIGHT : TOUCHPAD_BASE_WIDTH;
 
-        let time = event.get_time();
-        let [dx, dy] = event.get_scroll_delta();
+        const time = event.get_time();
+        const [dx, dy] = event.get_scroll_delta();
         if (dx === 0 && dy === 0) {
             this.emit('end', time, distance);
             this._began = false;
@@ -292,7 +292,7 @@ const ScrollGesture = GObject.registerClass({
         }
 
         if (!this._began) {
-            let [x, y] = event.get_coords();
+            const [x, y] = event.get_coords();
             this.emit('begin', time, x, y);
             this._began = true;
         }
@@ -405,7 +405,7 @@ export const SwipeTracker = GObject.registerClass({
             null);
         actor.add_action_full(params.name, params.phase, this._panGesture);
 
-        this._touchpadGesture = new TouchpadSwipeGesture(allowedModes);
+        this._touchpadGesture = new TouchpadSwipeGesture(actor, allowedModes);
         this._touchpadGesture.connect('begin', this._beginTouchpadGesture.bind(this));
         this._touchpadGesture.connect('update', this._updateTouchpadGesture.bind(this));
         this._touchpadGesture.connect('end', this._endTouchpadGesture.bind(this));
@@ -495,7 +495,7 @@ export const SwipeTracker = GObject.registerClass({
             return;
 
         const rect = new Mtk.Rectangle({x, y, width: 1, height: 1});
-        let monitor = global.display.get_monitor_index_for_rect(rect);
+        const monitor = global.display.get_monitor_index_for_rect(rect);
 
         this.emit('begin', monitor);
     }
@@ -523,8 +523,14 @@ export const SwipeTracker = GObject.registerClass({
     }
 
     _findPreviousPoint(pos) {
-        const reversedIndex = this._snapPoints.slice().reverse().findIndex(p => p <= pos);
-        return this._snapPoints.length - 1 - reversedIndex;
+        const index =
+            this._snapPoints.findLastIndex(p => p <= pos);
+        if (index !== -1)
+            return index;
+
+        console.trace(`Invalid position ${pos}`);
+        // also out-of-bounds, but somehow callers fail less hard than with -1
+        return this._snapPoints.length;
     }
 
     _findPointForProjection(pos, velocity) {
@@ -562,10 +568,6 @@ export const SwipeTracker = GObject.registerClass({
         if (this._state !== State.SCROLLING)
             return;
 
-        if (this.orientation === Clutter.Orientation.HORIZONTAL &&
-            Clutter.get_default_text_direction() === Clutter.TextDirection.RTL)
-            delta = -delta;
-
         this._progress += delta / distance;
 
         this._progress = Math.clamp(this._progress, ...this._getBounds(this._initialProgress));
@@ -576,8 +578,8 @@ export const SwipeTracker = GObject.registerClass({
     _updatePanGesture(panGesture) {
         const deltaVec = panGesture.get_delta_abs();
         const delta = this.orientation === Clutter.Orientation.HORIZONTAL
-            ? -deltaVec.get_x()
-            : -deltaVec.get_y();
+            ? this._getGestureDirFactor() * deltaVec.get_x()
+            : this._getGestureDirFactor() * deltaVec.get_y();
 
         this._updateGesture(delta, this._distance);
     }
@@ -587,6 +589,10 @@ export const SwipeTracker = GObject.registerClass({
             this._interrupt();
             return;
         }
+
+        if (this.orientation === Clutter.Orientation.HORIZONTAL &&
+            Clutter.get_default_text_direction() === Clutter.TextDirection.RTL)
+            delta = -delta;
 
         this._history.append(time, delta);
         this._updateGesture(delta, distance);
@@ -654,8 +660,8 @@ export const SwipeTracker = GObject.registerClass({
     _endPanGesture(panGesture) {
         const velocity = panGesture.get_velocity();
         const v = this.orientation === Clutter.Orientation.HORIZONTAL
-            ? -velocity.get_x()
-            : -velocity.get_y();
+            ? this._getGestureDirFactor() * velocity.get_x()
+            : this._getGestureDirFactor() * velocity.get_y();
 
         this._endGesture(v, this._distance, false);
     }
@@ -678,6 +684,14 @@ export const SwipeTracker = GObject.registerClass({
 
         this._cancelled = true;
         this._endGesture(0, this._distance, false);
+    }
+
+    _getGestureDirFactor() {
+        if (this.orientation === Clutter.Orientation.HORIZONTAL &&
+            Clutter.get_default_text_direction() === Clutter.TextDirection.RTL)
+            return 1;
+
+        return -1;
     }
 
     /**

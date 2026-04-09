@@ -166,11 +166,6 @@ export class Overview extends Signals.EventEmitter {
             reactive: true,
         });
         Main.layoutManager.overviewGroup.add_child(this._coverPane);
-        this._coverPane.connect('event', (_actor, event) => {
-            return event.type() === Clutter.EventType.ENTER ||
-                event.type() === Clutter.EventType.LEAVE
-                ? Clutter.EVENT_PROPAGATE : Clutter.EVENT_STOP;
-        });
         this._coverPane.hide();
 
         // XDND
@@ -267,7 +262,7 @@ export class Overview extends Signals.EventEmitter {
 
         DND.addDragMonitor(this._dragMonitor);
         // Remember the workspace we started from
-        let workspaceManager = global.workspace_manager;
+        const workspaceManager = global.workspace_manager;
         this._lastActiveWorkspaceIndex = workspaceManager.get_active_workspace_index();
     }
 
@@ -278,7 +273,7 @@ export class Overview extends Signals.EventEmitter {
         // we have to go back to where we started and hide
         // the overview
         if (this._shown) {
-            let workspaceManager = global.workspace_manager;
+            const workspaceManager = global.workspace_manager;
             workspaceManager.get_workspace_by_index(this._lastActiveWorkspaceIndex)
                 .activate(global.get_current_time());
             this.hide();
@@ -297,7 +292,7 @@ export class Overview extends Signals.EventEmitter {
     }
 
     _onDragMotion(dragEvent) {
-        let targetIsWindow = dragEvent.targetActor &&
+        const targetIsWindow = dragEvent.targetActor &&
                              dragEvent.targetActor._delegate &&
                              dragEvent.targetActor._delegate.metaWindow &&
                              !(dragEvent.targetActor._delegate instanceof WorkspaceThumbnail.WindowClone);
@@ -314,7 +309,7 @@ export class Overview extends Signals.EventEmitter {
 
         if (targetIsWindow) {
             this._lastHoveredWindow = dragEvent.targetActor._delegate.metaWindow;
-            this._windowSwitchTimeoutId = GLib.timeout_add(
+            this._windowSwitchTimeoutId = GLib.timeout_add_once(
                 GLib.PRIORITY_DEFAULT,
                 DND_WINDOW_SWITCH_TIMEOUT,
                 () => {
@@ -323,7 +318,6 @@ export class Overview extends Signals.EventEmitter {
                         this._windowSwitchTimestamp);
                     this.hide();
                     this._lastHoveredWindow = null;
-                    return GLib.SOURCE_REMOVE;
                 });
             GLib.Source.set_name_by_id(this._windowSwitchTimeoutId, '[gnome-shell] Main.activateWindow');
         }
@@ -347,8 +341,8 @@ export class Overview extends Signals.EventEmitter {
     }
 
     _onRestacked() {
-        let stack = global.get_window_actors();
-        let stackIndices = {};
+        const stack = global.get_window_actors();
+        const stackIndices = {};
 
         for (let i = 0; i < stack.length; i++) {
             // Use the stable sequence for an integer to use as a hash key
@@ -370,7 +364,6 @@ export class Overview extends Signals.EventEmitter {
             this._shown = true;
             this._visible = true;
             this._visibleTarget = true;
-            this._animationInProgress = true;
 
             Main.layoutManager.overviewGroup.set_child_above_sibling(
                 this._coverPane, null);
@@ -379,6 +372,8 @@ export class Overview extends Signals.EventEmitter {
 
             Main.layoutManager.showOverview();
             this._syncGrab();
+
+            this._animationInProgress = true;
         }
 
         this._overview.controls.gestureProgress(progress);
@@ -461,7 +456,7 @@ export class Overview extends Signals.EventEmitter {
             return true;
 
         if (this._shown) {
-            let shouldBeModal = !this._inXdndDrag;
+            const shouldBeModal = !this._inXdndDrag;
             if (shouldBeModal && !this._modal) {
                 if (global.display.is_grabbed()) {
                     this.hide();
@@ -471,12 +466,6 @@ export class Overview extends Signals.EventEmitter {
                 const grab = Main.pushModal(global.stage, {
                     actionMode: Shell.ActionMode.OVERVIEW,
                 });
-                if (grab.get_seat_state() !== Clutter.GrabState.ALL) {
-                    Main.popModal(grab);
-                    this.hide();
-                    return false;
-                }
-
                 this._grab = grab;
                 this._modal = true;
             }
@@ -554,13 +543,13 @@ export class Overview extends Signals.EventEmitter {
         if (!this._shown)
             return;
 
-        let event = Clutter.get_current_event();
+        const event = Clutter.get_current_event();
         if (event) {
-            let type = event.type();
+            const type = event.type();
             const button =
                 type === Clutter.EventType.BUTTON_PRESS ||
                 type === Clutter.EventType.BUTTON_RELEASE;
-            let ctrl = (event.get_state() & Clutter.ModifierType.CONTROL_MASK) !== 0;
+            const ctrl = (event.get_state() & Clutter.ModifierType.CONTROL_MASK) !== 0;
             if (button && ctrl)
                 return;
         }

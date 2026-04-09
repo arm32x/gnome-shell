@@ -193,9 +193,9 @@ class PortalWindow extends Gtk.ApplicationWindow {
         if (loadEvent === WebKit.LoadEvent.STARTED) {
             this._secureMenu.setSecurityIcon(PortalHelperSecurityLevel.NOT_YET_DETERMINED);
         } else if (loadEvent === WebKit.LoadEvent.COMMITTED) {
-            let tlsInfo = this._webView.get_tls_info();
-            let ret = tlsInfo[0];
-            let flags = tlsInfo[2];
+            const tlsInfo = this._webView.get_tls_info();
+            const ret = tlsInfo[0];
+            const flags = tlsInfo[2];
             if (ret && flags === 0)
                 this._secureMenu.setSecurityIcon(PortalHelperSecurityLevel.SECURE);
             else
@@ -209,7 +209,7 @@ class PortalWindow extends Gtk.ApplicationWindow {
 
     _onLoadFailedWithTlsErrors(view, failingURI, certificate, _errors) {
         this._secureMenu.setSecurityIcon(PortalHelperSecurityLevel.INSECURE);
-        let uri = GLib.Uri.parse(failingURI, HTTP_URI_FLAGS);
+        const uri = GLib.Uri.parse(failingURI, HTTP_URI_FLAGS);
         this._networkSession.allow_tls_certificate_for_host(certificate, uri.get_host());
         this._webView.load_uri(failingURI);
         return true;
@@ -271,10 +271,9 @@ class PortalWindow extends Gtk.ApplicationWindow {
                 const seconds =
                     (CONNECTIVITY_RECHECK_RATELIMIT_TIMEOUT - timeSinceLastRecheck) /
                     GLib.USEC_PER_SEC;
-                this._recheckTimeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, seconds, () => {
+                this._recheckTimeoutId = GLib.timeout_add_seconds_once(GLib.PRIORITY_DEFAULT, seconds, () => {
                     this._statusChangedCallback(PortalHelperResult.RECHECK);
                     this._recheckTimeoutId = 0;
-                    return GLib.SOURCE_REMOVE;
                 });
             }
         }
@@ -300,7 +299,7 @@ class WebPortalHelper extends Adw.Application {
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(HelperDBusInterface, this);
         this._queue = [];
 
-        let action = new Gio.SimpleAction({name: 'quit'});
+        const action = new Gio.SimpleAction({name: 'quit'});
         action.connect('activate', () => this.active_window.destroy());
         this.add_action(action);
     }
@@ -330,7 +329,7 @@ class WebPortalHelper extends Adw.Application {
 
     Close(connection) {
         for (let i = 0; i < this._queue.length; i++) {
-            let obj = this._queue[i];
+            const obj = this._queue[i];
 
             if (obj.connection === connection) {
                 if (obj.window)
@@ -345,7 +344,7 @@ class WebPortalHelper extends Adw.Application {
 
     Refresh(connection) {
         for (let i = 0; i < this._queue.length; i++) {
-            let obj = this._queue[i];
+            const obj = this._queue[i];
 
             if (obj.connection === connection) {
                 if (obj.window)
@@ -359,7 +358,7 @@ class WebPortalHelper extends Adw.Application {
         if (this._queue.length === 0)
             return;
 
-        let top = this._queue[0];
+        const top = this._queue[0];
         if (top.window != null)
             return;
 
